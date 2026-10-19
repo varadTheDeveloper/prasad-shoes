@@ -145,7 +145,7 @@ test('staff edits own order, cannot delete; owner deletes and restores', { skip 
   assert.equal((await call('POST', `/orders/${mine.id}/restore`, undefined, owner)).status, 200);
 });
 
-test('300 orders -> one Word file with 150 pages; reprint needs LABEL_REPRINT', { skip }, async () => {
+test('300 orders -> one Word file with 300 pages (1 per page); reprint needs LABEL_REPRINT', { skip }, async () => {
   const ids: number[] = [];
   for (let i = 0; i < 300; i += 25) {
     const batch = await Promise.all(Array.from({ length: 25 }, () => call('POST', '/orders', order(), owner)));
@@ -154,7 +154,7 @@ test('300 orders -> one Word file with 150 pages; reprint needs LABEL_REPRINT', 
   const t = Date.now();
   const r = await call('POST', '/labels', { orderIds: ids, markPrinted: true }, staff);
   assert.equal(r.status, 200);
-  assert.equal(r.headers.get('x-page-count'), '150');
+  assert.equal(r.headers.get('x-page-count'), '300');
   assert.match(r.headers.get('content-disposition') ?? '', /labels-\d{4}-\d{2}-\d{2}-300-orders\.docx/);
   assert.ok((r.data as Buffer).subarray(0, 2).toString() === 'PK', 'docx is a zip');
   assert.ok(Date.now() - t < 10_000, 'under 10 seconds');

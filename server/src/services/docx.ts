@@ -1,20 +1,13 @@
-// Builds the editable Word file: A4 portrait, 2 labels per page, exactly like the shop's
-// current "Post Office COD" file. One table row = one label (half a page), so Word moves to a
-// new page after every 2 labels by itself, and there is no limit on the number of orders.
+// Builds the editable Word file: A4 portrait, ONE order per page, with the same label text as
+// the shop's "Post Office COD" file. Each order starts on a new page (page break), so
+// N orders = N pages and there is no limit on the number of orders.
 import {
   AlignmentType,
   BorderStyle,
   Document,
-  HeightRule,
   Packer,
   Paragraph,
-  Table,
-  TableBorders,
-  TableCell,
-  TableRow,
   TextRun,
-  VerticalAlign,
-  WidthType,
 } from 'docx';
 import { fromLines, orderLine, toLines, type LabelOrder, type LabelShop } from '../../../shared/label';
 
@@ -26,8 +19,6 @@ const PAGE_W = 11906;
 const PAGE_H = 16838;
 const MARGIN_TB = 720; // 1.27 cm
 const MARGIN_LR = 1080; // 1.9 cm
-// Two rows must fit the usable height with a little room for Word's own rounding.
-const ROW_H = Math.floor((PAGE_H - 2 * MARGIN_TB) / 2) - 60;
 
 const font = { ascii: FONT, hAnsi: FONT, cs: FONT, eastAsia: FONT };
 
@@ -48,10 +39,10 @@ const right = (children: TextRun[], extra: Partial<ConstructorParameters<typeof 
 const left = (children: TextRun[], extra: Partial<ConstructorParameters<typeof Paragraph>[0] & object> = {}) =>
   new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 0, line: 276 }, children, ...extra });
 
-function labelParagraphs(o: LabelOrder, shop: LabelShop): Paragraph[] {
+function labelParagraphs(o: LabelOrder, shop: LabelShop, newPage: boolean): Paragraph[] {
   const to = toLines(o);
   const ps: Paragraph[] = [];
-  ps.push(right([run('TO, ', { bold: true }), run(o.ship_name, { bold: true })]));
+  ps.push(right([run('TO, ', { bold: true }), run(o.ship_name, { bold: true })], newPage ? { pageBreakBefore: true } : {}));
   for (const l of to) ps.push(right([run(l)]));
   // Order line, then the dashed cut line under it
   ps.push(right([run(orderLine(o), { bold: true })], { spacing: { before: 240, after: 120 } }));
@@ -67,32 +58,13 @@ function labelParagraphs(o: LabelOrder, shop: LabelShop): Paragraph[] {
   return ps;
 }
 
-function emptyRow() {
-  return new TableRow({
-    height: { value: ROW_H, rule: HeightRule.ATLEAST },
-    cantSplit: true,
-    children: [new TableCell({ children: [new Paragraph({ children: [] })], borders: TableBorders.NONE })],
-  });
-}
-
 export async function buildLabelsDocx(orders: LabelOrder[], shop: LabelShop): Promise<Buffer> {
-  const rows = orders.map(
-    (o) =>
-      new TableRow({
-        // "at least" half a page: a very long address grows the row instead of being cut off.
-        height: { value: ROW_H, rule: HeightRule.ATLEAST },
-        cantSplit: true,
-        children: [
-          new TableCell({
-            children: labelParagraphs(o, shop),
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 240, bottom: 120, left: 120, right: 120 },
-            borders: TableBorders.NONE,
-          }),
-        ],
-      }),
-  );
-  if (rows.length === 0) rows.push(emptyRow());
+  const children: Paragraph[] = [];
+  orders.forEach((o, i) => {
+    // Every order after the first starts on a new page.
+    children.push(...labelParagraphs(o, shop, i > 0));
+  });
+  if (children.length === 0) children.push(new Paragraph({ children: [] }));
 
   const doc = new Document({
     creator: shop.shop_name,
@@ -108,16 +80,7 @@ export async function buildLabelsDocx(orders: LabelOrder[], shop: LabelShop): Pr
             margin: { top: MARGIN_TB, bottom: MARGIN_TB, left: MARGIN_LR, right: MARGIN_LR, header: 0, footer: 0 },
           },
         },
-        children: [
-          new Table({
-            width: { size: PAGE_W - 2 * MARGIN_LR, type: WidthType.DXA },
-            columnWidths: [PAGE_W - 2 * MARGIN_LR],
-            borders: TableBorders.NONE,
-            rows,
-          }),
-          // Word needs a paragraph after a table; keep it 1 pt so it never makes an extra blank page.
-          new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: 'exact' as any }, children: [new TextRun({ text: '', size: 2 })] }),
-        ],
+        children,
       },
     ],
   });

@@ -61,4 +61,6 @@ export function fromLines(s: LabelShop): string[] {
   ];
 }
 
-export const pagesFor = (orderCount: number) => Math.ceil(orderCount / 2);
+/** One order per A4 page. */
+export const LABELS_PER_PAGE = 1;
+export const pagesFor = (orderCount: number) => Math.ceil(orderCount / LABELS_PER_PAGE);

@@ -1,7 +1,7 @@
 # Prasad Shoes – Order & Label App
 
 Staff paste a customer's WhatsApp address message → the app fills the order → Save.
-The owner ticks orders → downloads **one editable Word file, 2 parcel labels per A4 page** (same layout as the shop's "Post Office COD" file).
+The owner ticks orders → downloads **one editable Word file with one order per A4 page** (same label text as the shop's "Post Office COD" file).
 
 Built from **BRD v1.0** (12 screens, 9 staff permissions, duplicate protection) in the **Clean Blue** UI template.
 
@@ -39,8 +39,8 @@ Node 24 instead of the BRD's Node 20, because Node 20 reached end-of-life in Apr
 ## Checked before hand-over
 
 - Parser: 12 tests pass, including both real samples (Sudharshan, Devidas Shinde in Marathi), Hindi labels, no-label messages, WhatsApp Web copies.
-- API: 13 end-to-end tests pass against real PostgreSQL – login lock, first-login password change, permissions applied without re-login, staff sees only own orders / no amounts, double-tap Save = 1 order, two staff saving the same message at once = 1 order + "Already saved by…", Save anyway only with permission, deactivated staff logged out, 300 orders → one 150-page Word file.
-- Word file: 40 orders = 20 pages, 3 orders = 2 pages (bottom half empty), 500 orders built in under 1 second.
+- API: 13 end-to-end tests pass against real PostgreSQL – login lock, first-login password change, permissions applied without re-login, staff sees only own orders / no amounts, double-tap Save = 1 order, two staff saving the same message at once = 1 order + "Already saved by…", Save anyway only with permission, deactivated staff logged out, 300 orders → one 300-page Word file.
+- Word file: one order per page – 40 orders = 40 pages, 3 orders = 3 pages; 500 orders built in under 1 second.
 - Website: every screen clicked through in a browser (phone and desktop sizes), Word file downloaded.
 - Android bundle compiles. The APK itself is built with EAS (needs your Expo login – see the guide).
 - Server release rehearsed: `release.sh` installs, migrates with the owner DB user, and runs the API with the limited app user.

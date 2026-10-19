@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Muted, Pill } from './ui';
 import { C, R } from '@/lib/theme';
-import { rupees, time } from '@/lib/format';
+import { payText, time } from '@/lib/format';
 import type { DuplicateMatch } from '@shared/types';
 
 /** Screen 5 · Duplicate warning (bottom sheet). */
@@ -36,7 +36,7 @@ export function DuplicateSheet({
             {matches.map((m) => (
               <View key={m.id} style={st.match}>
                 <Text style={st.matchTitle}>
-                  {m.ship_name} · {m.payment_type === 'COD' ? `COD ${m.amount !== undefined ? rupees(m.amount) : ''}` : 'Prepaid'}
+                  {[m.ship_name, payText(m)].filter(Boolean).join(' · ')}
                 </Text>
                 <Muted>
                   {m.address} · {m.pincode}

@@ -47,8 +47,9 @@ r.post(
     const ids = [...new Set(orderIds)];
     const { rows } = await q(`SELECT ${LABEL_COLS} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
     const byId = new Map(rows.map((o) => [o.id, o]));
-    // Keep the order the user selected; skip orders this user may not see.
-    const orders = ids.map((id) => byId.get(id)).filter((o) => o && (can(u, 'ORDER_VIEW_ALL') || o.created_by === u.id));
+    // One combined list: orders saved by the owner and by every staff member print together,
+    // in the order the user selected them.
+    const orders = ids.map((id) => byId.get(id)).filter(Boolean);
     if (orders.length === 0) throw notFound('No orders to print');
     const already = orders.filter((o) => o.is_printed);
     if (already.length && !can(u, 'LABEL_REPRINT')) {
@@ -90,12 +91,10 @@ r.get(
   '/',
   requirePermission('LABEL_PRINT'),
   h(async (req, res) => {
-    const mine = can(req.user, 'ORDER_VIEW_ALL') ? '' : 'WHERE b.created_by = $1';
     const { rows } = await q(
       `SELECT b.id, b.order_count, b.page_count, b.created_at, u.name AS created_by_name
-         FROM label_batches b JOIN users u ON u.id = b.created_by ${mine}
+         FROM label_batches b JOIN users u ON u.id = b.created_by
         ORDER BY b.created_at DESC LIMIT 20`,
-      mine ? [req.user.id] : [],
     );
     res.json({ batches: rows });
   }),

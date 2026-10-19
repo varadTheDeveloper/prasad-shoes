@@ -1,4 +1,16 @@
+import { FEATURES } from '@shared/features';
+
 const TZ = 'Asia/Kolkata';
+
+/**
+ * Payment / amount text shown in lists. While COD is switched off this is just the amount
+ * (or nothing when the amount was left blank); with COD on it is "COD ₹1,299" / "Prepaid".
+ */
+export function payText(o: { payment_type: string; amount?: number | null }, showAmount = true): string {
+  const amt = showAmount && o.amount !== undefined && o.amount !== null && o.amount > 0 ? rupees(o.amount) : '';
+  if (!FEATURES.cod) return amt;
+  return o.payment_type === 'COD' ? `COD ${amt}`.trim() : 'Prepaid';
+}
 
 export function rupees(n: number | null | undefined): string {
   if (n === null || n === undefined) return '';

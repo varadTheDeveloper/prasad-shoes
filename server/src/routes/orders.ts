@@ -6,6 +6,7 @@ import { HttpError, forbidden, h, notFound } from '../errors';
 import { can, requireAdmin, requirePermission, type AuthUser } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { normaliseForHash, normaliseMobile } from '../../../shared/parser';
+import { DEFAULT_PAYMENT, effectivePayment } from '../../../shared/features';
 
 const r = Router();
 
@@ -46,8 +47,13 @@ const fields = {
   product_name: opt(150),
   size: opt(20),
   note: opt(250),
-  payment_type: z.enum(['COD', 'PREPAID']).default('COD'),
-  amount: z.coerce.number().min(0).max(10_000_000).nullish(),
+  // While COD is switched off (shared/features.ts) every order is stored as PREPAID.
+  payment_type: z.enum(['COD', 'PREPAID']).default(DEFAULT_PAYMENT).transform(effectivePayment),
+  // Optional: blank ('' / null / missing) is saved as blank.
+  amount: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.coerce.number('Amount must be a number').min(0, 'Amount cannot be negative').max(10_000_000).nullable(),
+  ).optional(),
 };
 
 const createBody = z.object({
@@ -57,12 +63,12 @@ const createBody = z.object({
   force: z.boolean().optional(),
 });
 
-/** Parse a new order and report every wrong field at once (including "COD needs amount"). */
+/** Parse a new order and report every wrong field at once. Amount is needed only for COD. */
 function parseCreate(body: any) {
   const res = createBody.safeParse(body);
   const errs: Record<string, string> = {};
   if (!res.success) for (const i of res.error.issues) errs[i.path.join('.')] ??= i.message;
-  if ((body?.payment_type ?? 'COD') === 'COD' && !(Number(body?.amount) > 0)) errs.amount ??= 'Enter COD amount';
+  if (effectivePayment(body?.payment_type ?? DEFAULT_PAYMENT) === 'COD' && !(Number(body?.amount) > 0)) errs.amount ??= 'Enter COD amount';
   if (Object.keys(errs).length || !res.success) {
     throw new HttpError(400, 'VALIDATION', 'Please check the highlighted fields', { fields: errs });
   }
@@ -90,9 +96,9 @@ async function getOrder(id: number, withRaw = false) {
   return rows[0] ?? null;
 }
 
-function canView(u: AuthUser, o: { created_by: number; deleted_at: unknown }) {
-  if (o.deleted_at && u.role !== 'ADMIN') return false;
-  return can(u, 'ORDER_VIEW_ALL') || o.created_by === u.id;
+/** One combined list: every logged-in user sees every order (deleted ones: owner only). */
+function canView(u: AuthUser, o: { deleted_at: unknown }) {
+  return !o.deleted_at || u.role === 'ADMIN';
 }
 
 function canEdit(u: AuthUser, o: { created_by: number }) {
@@ -108,7 +114,7 @@ r.post(
     const u = req.user;
     if (o.force && !can(u, 'DUPLICATE_OVERRIDE')) throw forbidden('Only the owner can save a duplicate. Ask the owner.');
     const hash = msgHash(o.raw_message || `${o.ship_name}|${o.mobile1}|${o.pincode}|${o.address}`);
-    const amount = o.payment_type === 'PREPAID' ? Number(o.amount ?? 0) : Number(o.amount);
+    const amount = o.amount ?? null; // blank stays blank
 
     const result = await tx(async (c) => {
       // Same customer / same message saved by two people at the same moment: the second waits here.
@@ -195,8 +201,7 @@ r.get(
     if (f.to) add(`o.created_at < (?::date + 1)`, f.to);
     if (f.printed === 'yes') where.push('o.is_printed');
     if (f.printed === 'no') where.push('NOT o.is_printed');
-    if (!can(u, 'ORDER_VIEW_ALL')) add('o.created_by = ?', u.id);
-    else if (f.createdBy) add('o.created_by = ?', f.createdBy);
+    if (f.createdBy) add('o.created_by = ?', f.createdBy); // optional, not used by the app
     if (f.q) {
       const digits = f.q.replace(/\D/g, '');
       if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
@@ -241,6 +246,7 @@ r.put(
     // Users who cannot see amounts cannot change them either.
     if (!can(u, 'ORDER_VIEW_AMOUNT')) delete patch.amount;
     const next = { ...before, ...Object.fromEntries(Object.entries(patch).filter(([k, v]) => v !== undefined && k in (req.body ?? {}))) };
+    next.payment_type = effectivePayment(next.payment_type);
     if (next.payment_type === 'COD' && !(Number(next.amount) > 0)) {
       throw new HttpError(400, 'VALIDATION', 'Enter COD amount', { fields: { amount: 'Enter COD amount' } });
     }
@@ -250,7 +256,7 @@ r.put(
                 product_name=$10, size=$11, note=$12, payment_type=$13, amount=$14, updated_by=$15, updated_at=now()
           WHERE id = $1`,
         [id, next.ship_name, next.address, next.landmark, next.district, next.state, next.pincode, next.mobile1, next.mobile2,
-          next.product_name, next.size, next.note, next.payment_type, next.payment_type === 'PREPAID' ? Number(next.amount ?? 0) : next.amount, u.id],
+          next.product_name, next.size, next.note, next.payment_type, next.amount ?? null, u.id],
       );
       await audit(c, u.id, 'ORDER_EDIT', 'orders', id, before, next);
     });

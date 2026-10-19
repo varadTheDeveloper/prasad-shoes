@@ -60,6 +60,80 @@ const LABELS: { key: Key; re: RegExp }[] = [
   { key: 'address', re: new RegExp(`^(?:address|addr|add|full\\s*address|पत्ता|पता)${END}`, 'i') },
 ];
 
+// ---------------------------------------------------------------------------------------------
+// Misspelt labels: customers type "Landmmark", "Adress", "Pincod", "Mobil no1", "Distric"...
+// The first word (or first two words joined) is compared with each label by edit distance.
+// Long labels allow 2 typos, 5–6 letter labels allow 1. Short labels use a fixed typo list.
+// ---------------------------------------------------------------------------------------------
+const FUZZY: { key: Key; words: string[]; typos?: string[] }[] = [
+  { key: 'landmark', words: ['landmark', 'nearby'] },
+  { key: 'address', words: ['address', 'fulladdress'] },
+  { key: 'pincode', words: ['pincode', 'pinno', 'postalcode'] },
+  { key: 'district', words: ['district'] },
+  { key: 'mobile1', words: ['mobile', 'mobileno', 'mobilenumber', 'phoneno', 'contact', 'contactno'] },
+  { key: 'state', words: [], typos: ['sate', 'stat', 'staet', 'stae', 'stete', 'satte'] },
+  { key: 'ship_name', words: [], typos: ['naame', 'nmae', 'naav', 'nane', 'neme'] },
+  { key: 'size', words: [], typos: ['sise', 'siz', 'sizee', 'saiz', 'saize', 'syze'] },
+];
+
+/** Edit distance (with swapped neighbours counting as one edit). */
+function editDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+const allowedTypos = (word: string) => (word.length >= 7 ? 2 : word.length >= 5 ? 1 : 0);
+
+function fuzzyLabel(raw: string): { key: Key; rest: string } | null {
+  const m = raw.match(/^([A-Za-z]+)(?:(\s*[.\-]?\s*)([A-Za-z]+))?/);
+  if (!m) return null;
+  const candidates = [{ text: m[1].toLowerCase(), used: m[1].length }];
+  if (m[3]) candidates.push({ text: (m[1] + m[3]).toLowerCase(), used: m[0].length });
+  let best: { key: Key; used: number; dist: number } | null = null;
+  for (const c of candidates) {
+    if (c.text.length < 3) continue;
+    for (const f of FUZZY) {
+      if (f.typos?.includes(c.text)) {
+        if (!best || 0 < best.dist || c.used > best.used) best = { key: f.key, used: c.used, dist: 0 };
+        continue;
+      }
+      for (const w of f.words) {
+        if (c.text.length < 4) continue;
+        const dist = editDistance(c.text, w);
+        if (dist <= allowedTypos(w) && (!best || dist < best.dist || (dist === best.dist && c.used > best.used))) {
+          best = { key: f.key, used: c.used, dist };
+        }
+      }
+    }
+  }
+  if (!best) return null;
+  // The label must be followed by a separator, a space or the end of the line.
+  const after = raw.slice(best.used);
+  if (after && !/^[\s:：\-–—.=,]/.test(after)) return null;
+  let key = best.key;
+  let rest = after;
+  if (key === 'mobile1') {
+    // "Mobil no1 98...", "Mobaile no. 2 - 98..."
+    const n = rest.match(/^\s*[.\-:]?\s*(?:no|num|number|nmbr|nbr)?\.?\s*[-:]?\s*(1|2|१|२)(?![0-9])/i);
+    if (n) {
+      if (n[1] === '2' || n[1] === '२') key = 'mobile2';
+      rest = rest.slice(n[0].length);
+    }
+    // Only a label if a phone number follows (or the number is on the next line).
+    if (cleanValue(rest) && findMobiles(rest).length === 0) return null;
+  }
+  if (key === 'pincode' && cleanValue(rest) && !findPincode(rest)) return null;
+  return { key, rest };
+}
+
 /** Single-line fields take only one following line when the label had no value. */
 const SINGLE_LINE: Key[] = ['ship_name', 'pincode', 'mobile1', 'mobile2', 'size', 'state', 'district'];
 
@@ -241,13 +315,28 @@ export function parseWhatsApp(text: string): ParseResult {
       continue;
     }
 
-    // Labelled line?
+    // Labelled line? Exact label first, then a misspelt one ("Landmmark", "Adress", "Pincod", "Mobil no1").
     let matched = false;
+    const hits: { key: Key; rest: string }[] = [];
     for (const { key, re } of LABELS) {
       const m = raw.match(re);
-      if (!m) continue;
+      if (m) {
+        const rest = raw.slice(m[0].length);
+        // "Mobile shop lane" is an address line, not a phone label: keep it so nothing is lost.
+        const v = cleanValue(rest);
+        if (v && (key === 'mobile1' || key === 'mobile2') && findMobiles(v).length === 0) break;
+        if (v && key === 'pincode' && !findPincode(v)) break;
+        hits.push({ key, rest });
+        break;
+      }
+    }
+    if (!hits.length && !LABELS.some(({ re }) => re.test(raw))) {
+      const fz = fuzzyLabel(raw);
+      if (fz) hits.push(fz);
+    }
+    for (const { key, rest } of hits) {
       matched = true;
-      const value = cleanValue(raw.slice(m[0].length));
+      const value = cleanValue(rest);
       if (value) {
         setField(key, value, false);
         // Address / landmark may continue on the next lines.
@@ -325,7 +414,17 @@ export function parseWhatsApp(text: string): ParseResult {
       guessed.push('state');
     }
   }
+  // Phone numbers written inside the address line: "..., Latur Mob 98500 11223"
+  if (!f.mobile1 || !f.mobile2) {
+    for (const m of findMobiles([f.address, f.landmark].join(' '))) {
+      if (!f.mobile1) f.mobile1 = m;
+      else if (!f.mobile2 && m !== f.mobile1) f.mobile2 = m;
+    }
+  }
   if (f.mobile2 === f.mobile1) f.mobile2 = '';
+  // The pincode and phones have their own fields: don't repeat them inside the address / landmark.
+  f.address = stripContactInfo(f.address, [f.pincode], [f.mobile1, f.mobile2]);
+  f.landmark = stripContactInfo(f.landmark, [f.pincode], [f.mobile1, f.mobile2]);
 
   const filled = (Object.keys(f) as Key[]).filter((k) => f[k]) as ParsedField[];
   if (amount !== null) filled.push('amount');
@@ -333,6 +432,42 @@ export function parseWhatsApp(text: string): ParseResult {
   const missing = required.filter((k) => !f[k as Key]);
 
   return { ...f, amount, filled, missing, guessed };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Remove a known pincode / mobile number (and the words "Pin code", "पिन कोड", "Mob", "+91" in
+// front of it) from free text, so the address does not repeat what is printed on its own line.
+// ---------------------------------------------------------------------------------------------
+const PIN_WORDS = '(?:(?:pin\\s*-?\\s*code|pincode|pin\\s*no|pin|postal\\s*code|पिन\\s*कोड|पिनकोड|पिन)\\s*[:：\\-.=]?\\s*)?';
+const MOB_WORDS =
+  '(?:(?:mob(?:ile)?|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर)?\\.?\\s*(?:[12](?![0-9]))?\\s*[:：\\-.=]?\\s*)?';
+const spaced = (digits: string) => digits.split('').join('[\\s-]?');
+
+export function stripContactInfo(text: string, pincodes: (string | null | undefined)[], mobiles: (string | null | undefined)[]): string {
+  if (!text) return text;
+  // Devanagari digit runs → ASCII only where a number could be a pincode / phone
+  let t = text.replace(/[०-९][०-९\s-]{4,}[०-९]/g, (m) => toAsciiDigits(m));
+  for (const m of mobiles) {
+    if (!m || !/^\d{10}$/.test(m)) continue;
+    t = t.replace(new RegExp(`${MOB_WORDS}(?<![0-9])(?:\\+?\\s?91[\\s-]?|0)?${spaced(m)}(?![0-9])`, 'gi'), ' ');
+  }
+  for (const p of pincodes) {
+    if (!p || !/^\d{6}$/.test(p)) continue;
+    t = t.replace(new RegExp(`${PIN_WORDS}(?<![0-9])${p.slice(0, 3)}\\s?${p.slice(3)}(?![0-9])`, 'gi'), ' ');
+  }
+  if (t === text) return text;
+  return t
+    .split('\n')
+    .map((l) =>
+      l
+        .replace(/\s+([,.])/g, '$1')
+        .replace(/([,.]\s*){2,}/g, ', ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/^[\s,.\-:/]+|[\s,\-:/]+$/g, '')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** Normalised form used for the duplicate check (server computes sha256 of this). */

@@ -61,7 +61,7 @@ export default function StaffPermissions() {
         <View>
           <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>{u.name}</Text>
           <Muted>
-            {maskMobile(u.mobile)} · {u.is_active ? 'Active' : 'Removed'} · {codes.length} of 9 on
+            {maskMobile(u.mobile)} · {u.is_active ? 'Active' : 'Removed'} · {codes.length} of {PERMISSIONS.length} on
           </Muted>
         </View>
       </Card>

@@ -27,9 +27,9 @@ export default function Labels() {
     queryKey: ['batches'],
     queryFn: () => api<{ batches: { id: number; order_count: number; page_count: number; created_at: string; created_by_name: string }[] }>('GET', '/labels'),
   });
-  // Preview: first 2 pages = first 2 orders
+  // Preview: first 2 pages = first 4 orders
   const preview = useQueries({
-    queries: ids.slice(0, 2).map((id) => ({ queryKey: ['order', String(id)], queryFn: () => api<Order>('GET', `/orders/${id}`) })),
+    queries: ids.slice(0, 4).map((id) => ({ queryKey: ['order', String(id)], queryFn: () => api<Order>('GET', `/orders/${id}`) })),
   });
   const previewOrders = preview.map((p) => p.data ?? null);
 
@@ -83,15 +83,15 @@ export default function Labels() {
             <Text style={{ fontSize: 18, fontWeight: '700', color: C.action }}>
               {n} orders → {pages} A4 page{pages === 1 ? '' : 's'}
             </Text>
-            <Text style={{ color: C.action }}>1 order per page</Text>
+            <Text style={{ color: C.action }}>2 labels per page</Text>
           </View>
           {shop.data ? (
             <Row gap={12} style={{ marginBottom: 14 }}>
-              <PagePreview label={previewOrders[0]} shop={shop.data} />
-              {n > 1 ? <PagePreview label={previewOrders[1]} shop={shop.data} /> : <View style={{ flex: 1 }} />}
+              <PagePreview labels={[previewOrders[0], previewOrders[1]]} shop={shop.data} />
+              {n > 2 ? <PagePreview labels={[previewOrders[2], previewOrders[3]]} shop={shop.data} /> : <View style={{ flex: 1 }} />}
             </Row>
           ) : null}
-          {n > 2 ? <Muted style={{ textAlign: 'center', marginTop: -6, marginBottom: 12 }}>Showing the first 2 pages of {pages}.</Muted> : null}
+          {n > 4 ? <Muted style={{ textAlign: 'center', marginTop: -6, marginBottom: 12 }}>Showing the first 2 pages of {pages}.</Muted> : null}
           <Card style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ fontSize: 16, color: C.text }}>Mark these orders as printed</Text>
             <Toggle value={markPrinted} onChange={setMarkPrinted} />

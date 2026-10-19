@@ -1,9 +1,9 @@
 // Permission codes shared by the app (to hide buttons) and the server (the real gate).
 // The owner (ADMIN) always has every permission. Staff get the defaults below when added.
+// Everyone sees the one combined order list, so there is no "see everyone's orders" switch.
 
 export const PERMISSIONS = [
   { code: 'ORDER_CREATE', label: 'Save new orders', group: 'Orders', defaultOn: true },
-  { code: 'ORDER_VIEW_ALL', label: "See everyone's orders", group: 'Orders', defaultOn: true },
   { code: 'ORDER_VIEW_AMOUNT', label: 'See amounts', group: 'Orders', defaultOn: true },
   { code: 'ORDER_EDIT_OWN', label: 'Edit own orders', group: 'Orders', defaultOn: true },
   { code: 'ORDER_EDIT_ALL', label: "Edit anyone's orders", group: 'Orders', defaultOn: false },

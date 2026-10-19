@@ -5,7 +5,8 @@ import { useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { Button, Card, ListRow, Loading, Muted, Page, Pill, Row, SectionTitle, Stat } from '@/components/ui';
-import { dayTime, longDate, rupees, rupeesShort, time } from '@/lib/format';
+import { dayTime, longDate, payText, rupeesShort, time } from '@/lib/format';
+import { FEATURES } from '@shared/features';
 import { C } from '@/lib/theme';
 
 interface Stats {
@@ -14,7 +15,7 @@ interface Stats {
   ordersToday: number;
   codToday: number | null;
   staffToday: { id: number; name: string; orders: number; last_order: string }[];
-  myRecent: { id: number; ship_name: string; pincode: string; payment_type: string; amount?: number; is_printed: boolean; created_at: string }[];
+  myRecent: { id: number; ship_name: string; pincode: string; payment_type: string; amount?: number | null; is_printed: boolean; created_at: string }[];
 }
 
 export default function Home() {
@@ -48,7 +49,7 @@ export default function Home() {
           <Row style={{ marginBottom: 14 }}>
             <Stat label="Orders today" value={d.ordersToday} />
             <Stat label="Not printed" value={d.notPrinted} tint />
-            <Stat label="COD today" value={rupeesShort(d.codToday)} />
+            {FEATURES.cod ? <Stat label="COD today" value={rupeesShort(d.codToday)} /> : null}
           </Row>
           <Button
             big
@@ -68,7 +69,7 @@ export default function Home() {
               </View>
             ) : (
               d.staffToday.map((s, i) => (
-                <ListRow key={s.id} last={i === d.staffToday.length - 1} onPress={() => router.push({ pathname: '/orders', params: { createdBy: String(s.id) } })}>
+                <ListRow key={s.id} last={i === d.staffToday.length - 1}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: C.text }}>{s.name}</Text>
                     <Muted>Last order {time(s.last_order)}</Muted>
@@ -109,7 +110,7 @@ export default function Home() {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: C.text }}>{o.ship_name}</Text>
                     <Muted>
-                      {[o.pincode, o.payment_type === 'COD' ? `COD ${o.amount !== undefined ? rupees(o.amount) : ''}`.trim() : 'Prepaid', dayTime(o.created_at)].join(' · ')}
+                      {[o.pincode, payText(o), dayTime(o.created_at)].filter(Boolean).join(' · ')}
                     </Muted>
                   </View>
                   <Pill kind={o.is_printed ? 'ok' : 'warn'} text={o.is_printed ? 'Printed' : 'Not printed'} />

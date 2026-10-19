@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { Field, Input, Row, Segmented } from './ui';
 import type { Order, OrderInput, PaymentType } from '@shared/types';
+import { DEFAULT_PAYMENT, FEATURES, effectivePayment } from '@shared/features';
 
 export interface FormState {
   ship_name: string;
@@ -31,7 +32,7 @@ export const emptyForm = (): FormState => ({
   product_name: '',
   size: '',
   note: '',
-  payment_type: 'COD',
+  payment_type: DEFAULT_PAYMENT,
   amount: '',
 });
 
@@ -48,7 +49,7 @@ export function formFromOrder(o: Order): FormState {
     product_name: o.product_name ?? '',
     size: o.size ?? '',
     note: o.note ?? '',
-    payment_type: o.payment_type,
+    payment_type: effectivePayment(o.payment_type),
     amount: o.amount === undefined || o.amount === null ? '' : String(o.amount),
   };
 }
@@ -67,7 +68,7 @@ export function toInput(f: FormState, showAmount: boolean): OrderInput {
     product_name: n(f.product_name),
     size: n(f.size),
     note: n(f.note),
-    payment_type: f.payment_type,
+    payment_type: effectivePayment(f.payment_type),
   };
   if (showAmount) out.amount = f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null;
   return out;
@@ -85,7 +86,10 @@ export function validate(f: FormState, showAmount: boolean): Record<string, stri
     const m2 = f.mobile2.replace(/\D/g, '').replace(/^(91|0)(?=[6-9]\d{9}$)/, '');
     if (!/^[6-9]\d{9}$/.test(m2)) e.mobile2 = '10 digits, starting 6–9';
   }
-  if (showAmount && f.payment_type === 'COD' && !(Number(f.amount.replace(/[,₹\s]/g, '')) > 0)) e.amount = 'Enter COD amount';
+  const amt = f.amount.replace(/[,₹\s]/g, '');
+  // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
+  if (showAmount && amt && !(Number(amt) >= 0)) e.amount = 'Enter a number, e.g. 1299';
+  if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = 'Enter COD amount';
   return e;
 }
 
@@ -153,25 +157,34 @@ export function OrderForm({
           {input('note', { placeholder: 'e.g. RED' })}
         </Field>
       </View>
-      <Row>
-        <Field label="Payment" style={half}>
-          <Segmented
-            options={[
-              { value: 'COD', label: 'COD' },
-              { value: 'PREPAID', label: 'Prepaid' },
-            ]}
-            value={f.payment_type}
-            onChange={(v) => onChange('payment_type', v)}
-          />
-        </Field>
-        {showAmount ? (
-          <Field label="Amount (₹)" required={f.payment_type === 'COD'} error={errors.amount} style={half}>
-            {input('amount', { keyboardType: 'decimal-pad', placeholder: f.payment_type === 'COD' ? '1299' : 'Optional' })}
+      {FEATURES.cod ? (
+        <Row>
+          <Field label="Payment" style={half}>
+            <Segmented
+              options={[
+                { value: 'COD', label: 'COD' },
+                { value: 'PREPAID', label: 'Prepaid' },
+              ]}
+              value={f.payment_type}
+              onChange={(v) => onChange('payment_type', v)}
+            />
           </Field>
-        ) : (
+          {showAmount ? (
+            <Field label="Amount (₹)" required={f.payment_type === 'COD'} error={errors.amount} style={half}>
+              {input('amount', { keyboardType: 'decimal-pad', placeholder: f.payment_type === 'COD' ? '1299' : 'Optional' })}
+            </Field>
+          ) : (
+            <View style={half} />
+          )}
+        </Row>
+      ) : showAmount ? (
+        <Row>
+          <Field label="Amount (₹, optional)" error={errors.amount} style={half}>
+            {input('amount', { keyboardType: 'decimal-pad', placeholder: 'Optional' })}
+          </Field>
           <View style={half} />
-        )}
-      </Row>
+        </Row>
+      ) : null}
     </View>
   );
 }

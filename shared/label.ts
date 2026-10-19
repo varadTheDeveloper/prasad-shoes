@@ -1,5 +1,6 @@
 // What gets printed on one parcel label. Used by the Word file (server) and the preview (app),
 // so both always show exactly the same text.
+import { stripContactInfo } from './parser';
 
 export interface LabelOrder {
   ship_name: string;
@@ -37,15 +38,24 @@ export function orderLine(o: LabelOrder): string {
   return parts.length ? `${head} (${parts.join(', ')})` : head;
 }
 
-/** The "TO" block lines under the "TO, <name>" line: address, landmark, district/state, pincode, mobiles. */
+/**
+ * The "TO" block lines under the "TO, <name>" line: address, landmark, district/state, pincode, mobiles.
+ * Nothing is printed twice: a pincode / mobile typed inside the address is left out of the address
+ * (it has its own line), and a landmark / district / state already written in the address is skipped.
+ */
 export function toLines(o: LabelOrder): string[] {
+  const pins = [o.pincode];
+  const mobs = [o.mobile1, o.mobile2];
   const lines: string[] = [];
-  for (const l of (o.address ?? '').split('\n')) if (l.trim()) lines.push(l.trim());
-  if (o.landmark?.trim()) lines.push(o.landmark.trim());
-  const ds = [o.district?.trim(), o.state?.trim()].filter(Boolean).join(', ');
-  if (ds) lines.push(ds);
+  const address = stripContactInfo(o.address ?? '', pins, mobs);
+  for (const l of address.split('\n')) if (l.trim()) lines.push(l.trim());
+  const seen = () => lines.join(' ').toLowerCase();
+  const landmark = stripContactInfo(o.landmark?.trim() ?? '', pins, mobs);
+  if (landmark && !seen().includes(landmark.toLowerCase())) lines.push(landmark);
+  const ds = [o.district?.trim(), o.state?.trim()].filter((x): x is string => !!x && !seen().includes(x.toLowerCase()));
+  if (ds.length) lines.push(ds.join(', '));
   lines.push(`Pin code ${o.pincode}`);
-  lines.push(`Mob. ${[o.mobile1, o.mobile2].filter(Boolean).join(', ')}`);
+  lines.push(`Mob. ${[...new Set(mobs.filter(Boolean))].join(', ')}`);
   return lines;
 }
 
@@ -61,6 +71,6 @@ export function fromLines(s: LabelShop): string[] {
   ];
 }
 
-/** One order per A4 page. */
-export const LABELS_PER_PAGE = 1;
+/** Two orders per A4 page (top half + bottom half). */
+export const LABELS_PER_PAGE = 2;
 export const pagesFor = (orderCount: number) => Math.ceil(orderCount / LABELS_PER_PAGE);

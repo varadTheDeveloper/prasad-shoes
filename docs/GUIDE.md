@@ -9,7 +9,7 @@ This guide explains everything in easy steps. Follow them in order.
 
 | Part | What it does | Where it runs |
 |---|---|---|
-| **App** (`app/`) | Staff paste the WhatsApp message → fields fill by themselves → Save. Owner ticks orders → downloads one Word file, one order per A4 page. | Android phone (APK) + website |
+| **App** (`app/`) | Staff paste the WhatsApp message → fields fill by themselves → Save. Everyone sees one combined order list; tick orders → one Word file, 2 orders per A4 page. | Android phone (APK) + website |
 | **Server** (`server/`) | Login, orders, duplicate check, staff permissions, makes the Word file | AWS server |
 | **Database** | PostgreSQL – all orders, staff and settings | **Same** AWS server (not open to the internet) |
 | **pgAdmin** | You see the tables and run SQL from your Windows PC | Your PC, connected safely through SSH |

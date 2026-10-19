@@ -26,12 +26,16 @@ export function setAuthErrorListener(l: Listener) {
   onAuthError = l;
 }
 
-async function request(method: string, path: string, body?: unknown): Promise<Response> {
+async function request(method: string, path: string, body?: unknown, timeoutMs = 20_000): Promise<Response> {
   const token = await getToken();
   let res: Response;
+  // Never spin forever: give up after timeoutMs and show a clear message.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     res = await fetch(`${API_URL}/api${path}`, {
       method,
+      signal: ctrl.signal,
       headers: {
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -39,7 +43,9 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, 'NETWORK', 'No internet or server not reachable. Check the connection and try again.');
+    throw new ApiError(0, 'NETWORK', `Server not reachable (${API_URL || 'same website'}). Check the internet and that the server is running.`);
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     let data: any = {};
@@ -65,7 +71,7 @@ export async function api<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'D
 
 /** For the Word file: returns raw bytes plus the file name and page count from the headers. */
 export async function apiFile(method: 'GET' | 'POST', path: string, body?: unknown) {
-  const res = await request(method, path, body);
+  const res = await request(method, path, body, 180_000); // big Word files can take longer
   const disp = res.headers.get('content-disposition') ?? '';
   const name = res.headers.get('x-file-name') ?? disp.match(/filename="?([^";]+)"?/)?.[1] ?? 'labels.docx';
   const bytes = new Uint8Array(await res.arrayBuffer());

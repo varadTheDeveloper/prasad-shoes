@@ -25,7 +25,7 @@ export interface Order {
   size: string | null;
   note: string | null;
   payment_type: PaymentType;
-  amount?: number | null; // missing when the user lacks ORDER_VIEW_AMOUNT
+  amount?: number | null; // null = left blank; missing when the user lacks ORDER_VIEW_AMOUNT
   is_printed: boolean;
   printed_at: string | null;
   raw_message?: string;

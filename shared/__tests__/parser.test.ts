@@ -195,7 +195,7 @@ test('pincode inside the address line', () => {
     `Rahul Pawar
 Shivaji peth, Satara 415002
 7020012345`,
-    { ship_name: 'Rahul Pawar', pincode: '415002', mobile1: '7020012345' },
+    { ship_name: 'Rahul Pawar', address: 'Shivaji peth, Satara', pincode: '415002', mobile1: '7020012345' },
   );
 });
 
@@ -218,4 +218,100 @@ test('helpers', () => {
   // Same message with different WhatsApp times hashes the same
   assert.equal(normaliseForHash('Naam - A\n12:39 pm'), normaliseForHash('naam -  a\n1:05 PM'));
   assert.notEqual(normaliseForHash('₹1,599.00'), normaliseForHash('₹1,699.00'));
+});
+
+test('customer test data: misspelt "Landmmark", "Mobile no1/no2" (Mohan Raj)', () => {
+  const r = check(
+    `Naam Mohan Raj
+Address  Raj nivas, rajapur, udgir, latur
+Landmmark Near grampanchaya
+State Maharashtra
+Pincode 413578
+Mobile no1 8463995363
+Mobile no2 8495898999`,
+    {
+      ship_name: 'Mohan Raj',
+      address: 'Raj nivas, rajapur, udgir, latur',
+      landmark: 'Near grampanchaya',
+      state: 'Maharashtra',
+      pincode: '413578',
+      mobile1: '8463995363',
+      mobile2: '8495898999',
+    },
+  );
+  assert.deepEqual(r.missing, []);
+});
+
+test('misspelt labels for every field', () => {
+  check(
+    `Nmae - Sunil Gaikwad
+Adress - Gat no 12, Shirur
+Lanmark - Behind Hanuman mandir
+Distric - Pune
+Sate - Maharashtra
+Pincod - 412210
+Mobil no 1 - 9850012345
+Mobaile no.2 - 7350012345
+Sise - 8`,
+    {
+      ship_name: 'Sunil Gaikwad',
+      address: 'Gat no 12, Shirur',
+      landmark: 'Behind Hanuman mandir',
+      district: 'Pune',
+      state: 'Maharashtra',
+      pincode: '412210',
+      mobile1: '9850012345',
+      mobile2: '7350012345',
+      size: '8',
+    },
+  );
+});
+
+test('more spellings: Land mark, Addres, Pin cod, Contact no, value on next line', () => {
+  check(
+    `Name: Kavita Jadhav
+Addres:
+Flat 4, Shanti Apartment
+Kothrud
+Land mark: Near D-Mart
+Pin cod: 411038
+Contact no: 9922012345`,
+    {
+      ship_name: 'Kavita Jadhav',
+      address: 'Flat 4, Shanti Apartment, Kothrud',
+      landmark: 'Near D-Mart',
+      pincode: '411038',
+      mobile1: '9922012345',
+    },
+  );
+});
+
+test('normal words are not taken as labels (no lost information)', () => {
+  check(
+    `Mobin Shaikh
+Statue road, Sangli
+Mobile shop lane
+416416
+9890011122`,
+    {
+      ship_name: 'Mobin Shaikh',
+      address: 'Statue road, Sangli, Mobile shop lane',
+      state: 'Maharashtra',
+      pincode: '416416',
+      mobile1: '9890011122',
+    },
+  );
+});
+
+test('pincode and mobile on the address line are not kept inside the address', () => {
+  check(
+    `TO, Devidas shinde
+कोंडी गाव, उत्तर सोलापूर जिल्हा सोलापूर पिन कोड 413255 +91 72760-52601`,
+    { ship_name: 'Devidas shinde', address: 'कोंडी गाव, उत्तर सोलापूर जिल्हा सोलापूर', pincode: '413255', mobile1: '7276052601' },
+  );
+  check(
+    `Name - Asha More
+Address - Plot 7, Gandhi chowk, Latur Pin code: 413512 Mob no 9850011223 / 9850011224`,
+    { address: 'Plot 7, Gandhi chowk, Latur', pincode: '413512', mobile1: '9850011223', mobile2: '9850011224' },
+  );
 });

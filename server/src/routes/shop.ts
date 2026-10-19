@@ -55,9 +55,9 @@ statsRouter.get(
   '/',
   h(async (req, res) => {
     const u = req.user;
-    const viewAll = can(u, 'ORDER_VIEW_ALL');
-    const scope = viewAll ? '' : 'AND o.created_by = $1';
-    const p = viewAll ? [] : [u.id];
+    const viewAll = true; // one combined order list for everyone
+    const scope = '';
+    const p: unknown[] = [];
     const today = `o.deleted_at IS NULL AND o.created_at >= current_date`;
 
     const [mine, notPrinted, todayAll, staff, recent] = await Promise.all([

@@ -7,6 +7,7 @@ import { useIsAdmin } from '@/lib/auth';
 import { Banner, Button, Card, Field, Input, Loading, Muted, Page, Row, SectionTitle, Toggle } from '@/components/ui';
 import { maskMobile } from '@/lib/format';
 import { C } from '@/lib/theme';
+import { PERMISSIONS } from '@shared/permissions';
 
 export interface StaffUser {
   id: number;
@@ -115,7 +116,7 @@ export default function Staff() {
               <Pressable style={{ flex: 1 }} onPress={() => router.push(`/staff/${u.id}`)}>
                 <Text style={{ fontSize: 17, fontWeight: '600', color: u.is_active ? C.text : C.muted }}>{u.name}</Text>
                 <Muted style={{ fontSize: 13 }}>
-                  {maskMobile(u.mobile)} · {u.permissions.length} of 9 on · {u.orders_today} today
+                  {maskMobile(u.mobile)} · {u.permissions.length} of {PERMISSIONS.length} on · {u.orders_today} today
                   {u.must_change_password ? ' · new password pending' : ''}
                 </Muted>
                 <Row gap={16} style={{ marginTop: 4 }}>

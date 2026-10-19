@@ -70,12 +70,37 @@ test('owner adds staff; staff must change temp password first', { skip }, async 
   assert.equal(again.data.mustChangePassword, false);
 });
 
-test('validation: missing pincode / bad mobile / COD without amount', { skip }, async () => {
-  const r = await call('POST', '/orders', order({ pincode: '01234', mobile1: '12345', amount: 0 }), staff);
+test('validation: missing pincode / bad mobile', { skip }, async () => {
+  const r = await call('POST', '/orders', order({ pincode: '01234', mobile1: '12345' }), staff);
   assert.equal(r.status, 400);
   assert.ok(r.data.error.fields.pincode);
   assert.ok(r.data.error.fields.mobile1);
-  assert.ok(r.data.error.fields.amount);
+  assert.ok(!r.data.error.fields.amount, 'amount is optional');
+});
+
+test('amount is optional: blank, null or missing all save, and stay blank', { skip }, async () => {
+  for (const amount of ['', null, undefined]) {
+    const o: any = order({ amount });
+    if (amount === undefined) delete o.amount;
+    delete o.payment_type;
+    const r = await call('POST', '/orders', o, staff);
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    assert.equal(r.data.amount, null);
+  }
+  const withAmt = await call('POST', '/orders', order({ amount: 1599 }), staff);
+  assert.equal(withAmt.data.amount, 1599);
+  // Editing an order and clearing its amount keeps working
+  const ed = await call('PUT', `/orders/${withAmt.data.id}`, { amount: null }, staff);
+  assert.equal(ed.status, 200);
+  assert.equal(ed.data.amount, null);
+});
+
+test('COD is switched off: every new order is saved as PREPAID', { skip }, async () => {
+  const r = await call('POST', '/orders', order({ payment_type: 'COD', amount: null }), staff);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.payment_type, 'PREPAID');
+  const d = await call('POST', '/orders', order({ payment_type: undefined }), staff);
+  assert.equal(d.data.payment_type, 'PREPAID');
 });
 
 test('product name empty or filled both save', { skip }, async () => {
@@ -116,19 +141,33 @@ test('same mobile + pincode in 3 days warns; Save anyway needs DUPLICATE_OVERRID
   assert.equal(ownerForced.data.dup_override, true);
 });
 
-test('permissions: no ORDER_VIEW_ALL = own orders only; no ORDER_VIEW_AMOUNT = no amounts; applies without re-login', { skip }, async () => {
-  await call('POST', '/orders', order(), owner);
+test('one combined list: staff and owner see everyone\'s orders; no ORDER_VIEW_AMOUNT = no amounts; applies without re-login', { skip }, async () => {
+  const ownersOrder = (await call('POST', '/orders', order(), owner)).data;
+  const staffsOrder = (await call('POST', '/orders', order(), staff)).data;
+  for (const tok of [staff, owner]) {
+    const ids = (await call('GET', '/orders?limit=1000', undefined, tok)).data.orders.map((o: any) => o.id);
+    assert.ok(ids.includes(ownersOrder.id) && ids.includes(staffsOrder.id), 'both orders in one list');
+  }
   await call('PUT', `/users/${staffId}/permissions`, { codes: ['ORDER_CREATE', 'ORDER_EDIT_OWN', 'LABEL_PRINT'] }, owner);
   const list = await call('GET', '/orders', undefined, staff);
   assert.equal(list.status, 200);
-  assert.ok(list.data.orders.length > 0);
-  assert.ok(list.data.orders.every((o: any) => o.created_by === staffId));
+  assert.ok(list.data.orders.some((o: any) => o.created_by !== staffId), 'still sees the owner\'s orders');
   assert.ok(list.data.orders.every((o: any) => !('amount' in o)));
   // Turn ORDER_CREATE off -> 403 on next action
   await call('PUT', `/users/${staffId}/permissions`, { codes: ['LABEL_PRINT'] }, owner);
   assert.equal((await call('POST', '/orders', order(), staff)).status, 403);
   // Back to defaults
-  await call('PUT', `/users/${staffId}/permissions`, { codes: ['ORDER_CREATE', 'ORDER_VIEW_ALL', 'ORDER_VIEW_AMOUNT', 'ORDER_EDIT_OWN', 'LABEL_PRINT'] }, owner);
+  await call('PUT', `/users/${staffId}/permissions`, { codes: ['ORDER_CREATE', 'ORDER_VIEW_AMOUNT', 'ORDER_EDIT_OWN', 'LABEL_PRINT'] }, owner);
+});
+
+test('staff prints owner + staff orders together in one Word file, 2 per page', { skip }, async () => {
+  const a = (await call('POST', '/orders', order(), owner)).data;
+  const b = (await call('POST', '/orders', order(), staff)).data;
+  const c = (await call('POST', '/orders', order({ amount: null }), owner)).data;
+  const r = await call('POST', '/labels', { orderIds: [a.id, b.id, c.id] }, staff);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.headers.get('x-page-count'), '2');
+  assert.match(r.headers.get('content-disposition') ?? '', /-3-orders\.docx/);
 });
 
 test('staff edits own order, cannot delete; owner deletes and restores', { skip }, async () => {
@@ -145,7 +184,7 @@ test('staff edits own order, cannot delete; owner deletes and restores', { skip 
   assert.equal((await call('POST', `/orders/${mine.id}/restore`, undefined, owner)).status, 200);
 });
 
-test('300 orders -> one Word file with 300 pages (1 per page); reprint needs LABEL_REPRINT', { skip }, async () => {
+test('300 orders -> one Word file with 150 pages (2 per page); reprint needs LABEL_REPRINT', { skip }, async () => {
   const ids: number[] = [];
   for (let i = 0; i < 300; i += 25) {
     const batch = await Promise.all(Array.from({ length: 25 }, () => call('POST', '/orders', order(), owner)));
@@ -154,7 +193,7 @@ test('300 orders -> one Word file with 300 pages (1 per page); reprint needs LAB
   const t = Date.now();
   const r = await call('POST', '/labels', { orderIds: ids, markPrinted: true }, staff);
   assert.equal(r.status, 200);
-  assert.equal(r.headers.get('x-page-count'), '300');
+  assert.equal(r.headers.get('x-page-count'), '150');
   assert.match(r.headers.get('content-disposition') ?? '', /labels-\d{4}-\d{2}-\d{2}-300-orders\.docx/);
   assert.ok((r.data as Buffer).subarray(0, 2).toString() === 'PK', 'docx is a zip');
   assert.ok(Date.now() - t < 10_000, 'under 10 seconds');

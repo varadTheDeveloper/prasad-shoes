@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useIsAdmin, usePermission } from '@/lib/auth';
 import { Button, Checkbox, Chip, Header, Input, Loading, Muted, Pill, useWide } from '@/components/ui';
-import { dayTime, rupees, shiftISO, todayISO } from '@/lib/format';
+import { dayTime, payText, shiftISO, todayISO } from '@/lib/format';
 import { setSelection } from '@/lib/selection';
 import { pagesFor } from '@shared/label';
 import { C, R } from '@/lib/theme';
@@ -16,7 +16,7 @@ type PrintFilter = 'no' | 'yes' | 'all' | 'deleted';
 
 /** Screen 6 · Orders: select & print. */
 export default function Orders() {
-  const params = useLocalSearchParams<{ preset?: string; createdBy?: string }>();
+  const params = useLocalSearchParams<{ preset?: string }>();
   const admin = useIsAdmin();
   const canPrint = usePermission('LABEL_PRINT');
   const canReprint = usePermission('LABEL_REPRINT');
@@ -26,7 +26,6 @@ export default function Orders() {
   const [date, setDate] = useState<DateFilter>('today');
   const [printed, setPrinted] = useState<PrintFilter>('all');
   const [q, setQ] = useState('');
-  const [createdBy, setCreatedBy] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [autoSelect, setAutoSelect] = useState(false);
 
@@ -37,12 +36,7 @@ export default function Orders() {
       setPrinted('no');
       setAutoSelect(true);
     }
-    if (params.createdBy) {
-      setCreatedBy(params.createdBy);
-      setDate('today');
-      setPrinted('all');
-    }
-  }, [params.preset, params.createdBy]);
+  }, [params.preset]);
 
   const range = useMemo(() => {
     const t = todayISO();
@@ -57,7 +51,6 @@ export default function Orders() {
     printed: printed === 'deleted' ? 'all' : printed,
     ...(printed === 'deleted' ? { deleted: '1' } : {}),
     ...(q.trim() ? { q: q.trim() } : {}),
-    ...(createdBy ? { createdBy } : {}),
     limit: '1000',
   }).toString();
 
@@ -93,8 +86,6 @@ export default function Orders() {
     router.push({ pathname: '/labels', params: { n: String(picked.length) } });
   }
 
-  const creatorName = createdBy ? orders.find((o) => String(o.created_by) === createdBy)?.created_by_name : undefined;
-
   const filters = (
     <View style={[st.filters, { maxWidth: wide ? 1100 : 720 }]}>
       <View style={st.chips}>
@@ -108,7 +99,6 @@ export default function Orders() {
         <Chip title="Printed" active={printed === 'yes'} onPress={() => setPrinted('yes')} />
         <Chip title="All" active={printed === 'all'} onPress={() => setPrinted('all')} />
         {admin ? <Chip title="Deleted" active={printed === 'deleted'} onPress={() => setPrinted('deleted')} /> : null}
-        {createdBy ? <Chip title={`By ${creatorName ?? 'staff'}  ✕`} active onPress={() => setCreatedBy(undefined)} /> : null}
       </View>
       <Input value={q} onChangeText={setQ} placeholder="Search name, mobile or pincode" style={{ marginBottom: 10 }} />
       {canPrint && printed !== 'deleted' && notPrinted.length > 0 ? (
@@ -125,7 +115,7 @@ export default function Orders() {
 
   const renderItem = ({ item: o, index }: { item: Order; index: number }) => {
     const sel = selected.has(o.id);
-    const meta = [o.pincode, o.size ? `${o.size} no` : '', o.product_name ?? '', o.note ?? '', `by ${o.created_by_name}`].filter(Boolean);
+    const meta = [o.pincode, o.size ? `${o.size} no` : '', o.product_name ?? '', o.note ?? ''].filter(Boolean);
     return (
       <View style={[st.rowWrap, { maxWidth: wide ? 1100 : 720 }]}>
         <Pressable
@@ -147,7 +137,7 @@ export default function Orders() {
               <Text style={st.name} numberOfLines={1}>
                 {o.ship_name}
               </Text>
-              <Text style={st.amount}>{o.payment_type === 'COD' ? `COD ${showAmount ? rupees(o.amount) : ''}`.trim() : 'Prepaid'}</Text>
+              <Text style={st.amount}>{payText(o, showAmount)}</Text>
             </View>
             <Muted style={{ marginTop: 2 }}>
               {meta.join(' · ')}

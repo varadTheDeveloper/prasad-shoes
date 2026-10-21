@@ -12,7 +12,7 @@ Owner (Varad) wants things explained in simple language, and the plan explained 
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
 - `app/` – Expo SDK 58 (Expo Router, TanStack Query): Android APK + website from the same code.
   Home = paste screen; Orders = List (print) / Table (owner, Excel CSV export).
-- `deploy/` – AWS Lightsail scripts: `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
+- `deploy/` – AWS server scripts (written for Lightsail, used on EC2): `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
 
 ## Run on the PC (Windows)
 ```powershell
@@ -30,19 +30,33 @@ $env:API_URL="http://localhost:3000"; $env:OWNER_MOBILE="7020861805"; $env:OWNER
 cd app; npx tsc --noEmit
 ```
 
-## Deploy to AWS (docs/GUIDE.md Steps 1–5)
-1. Lightsail Ubuntu 24.04 (Mumbai), static IP, firewall 22/80/443 only (never 5432). Key at `$HOME\.ssh\prasad-lightsail.pem`.
-2. One time: `powershell -ExecutionPolicy Bypass -File deploy\upload.ps1 -Server ubuntu@<IP> -Setup` (add `-Domain x.in` if any).
-3. Every update: `powershell -ExecutionPolicy Bypass -File deploy\upload.ps1 -Server ubuntu@<IP>`
-   (builds website, uploads server + website, runs migrations, restarts PM2).
-4. Owner login on the server: `cd /opt/prasad-shoes/server && npm run seed -- --name Owner --mobile <mobile> --password "<strong>"`.
-5. pgAdmin: SSH tunnel (host = IP, user ubuntu, the .pem) → localhost:5432, db `prasad_shoes`, user `ps_owner`
-   (password in `~/prasad-shoes-db-credentials.txt` on the server).
+## Live setup (as of 21 Oct 2026)
+- Server: **AWS EC2**, Mumbai (ap-south-1), Ubuntu 24.04, 20 GB disk, Elastic IP **13.203.156.41**.
+  Security group: 22, 80, 443 only (PostgreSQL 5432 stays closed). Login user `ubuntu`, key `prasad-key` (.pem, not in Git).
+- Website + API: **https://13-203-156-41.sslip.io** (free sslip.io name + Let's Encrypt, renews itself).
+  Health check: `/api/health`. API runs under PM2 as `prasad-api`; code in `/opt/prasad-shoes`, website in `/var/www/prasad-shoes`.
+- Database: PostgreSQL 16 on the same server, db `prasad_shoes`, users `ps_owner` (migrations) / `ps_app` (API).
+  Passwords only in `~/prasad-shoes-db-credentials.txt` and `/opt/prasad-shoes/server/.env` on the server – never print or commit them.
+- Nightly backup at 1 am (14 days kept). pgAdmin: SSH tunnel to the server, then localhost:5432.
+- APK: built with **EAS** (Expo account `varad0108`, project `prasad-shoes`, profile `apk`). The signing key is stored by Expo –
+  always build with the same account, or phones can't update the app.
 
-## APK (docs/GUIDE.md Step 6)
-Set `EXPO_PUBLIC_API_URL` in `app/eas.json` to the **https** server address, commit, then in `app`:
-`npx eas-cli@latest login` → `npx eas-cli@latest build --platform android --profile apk`.
-A new APK is needed only when screens change; server changes reach the APK by themselves.
+## Updating the live server
+Done **on the server** (a Claude session runs there), from GitHub `main`:
+```bash
+cd ~/prasad-shoes && git pull
+cd app && npm ci && npx expo export --platform web            # website -> app/dist
+rm -rf /tmp/ps-release && mkdir -p /tmp/ps-release && cp -r ../server ../shared ../deploy /tmp/ps-release/ && cp -r dist /tmp/ps-release/web
+rm -rf /tmp/ps-release/server/node_modules /tmp/ps-release/server/.env
+bash ~/prasad-shoes/deploy/release.sh /tmp/ps-release          # build API, run migrations, restart PM2, publish website
+```
+(Alternative from Windows: `deploy\upload.ps1 -Server ubuntu@13.203.156.41`, see docs/GUIDE.md.)
+Owner login (re)set: `cd /opt/prasad-shoes/server && npm run seed -- --name Owner --mobile 7020861805 --password "<strong>"`.
+
+## New APK (only when screens change)
+On the PC: commit + push, then in `app`: `npx eas-cli@latest build --platform android --profile apk`.
+`app/eas.json` already points the APK to `https://13-203-156-41.sslip.io` (must be https).
+Server-only changes do not need a new APK.
 
 ## Rules – don't break these
 - Never commit `.env`, `*.pem`, keystores. Secrets live only in `server/.env` and on the server.

@@ -238,7 +238,7 @@ export default function Orders() {
       <View style={[st.rowWrap, { maxWidth: wide ? 1100 : 720 }]}>
         <Pressable
           onPress={() => router.push(`/order/${o.id}`)}
-          style={({ pressed }) => [st.row, index === 0 && st.first, index === orders.length - 1 && st.last, sel && { backgroundColor: C.tint }, pressed && { backgroundColor: '#EEF2F7' }]}
+          style={({ pressed }) => [st.row, index === 0 && st.first, index === orders.length - 1 && st.last, sel && { backgroundColor: C.tint }, pressed && { backgroundColor: C.pressed }]}
         >
           {canPrint && !deleted ? (
             <View style={{ opacity: selectable(o) ? 1 : 0.35 }}>

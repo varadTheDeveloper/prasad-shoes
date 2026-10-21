@@ -103,7 +103,7 @@ export function Muted({ children, style }: { children: ReactNode; style?: any })
 
 export function Stat({ label, value, tint }: { label: string; value: string | number; tint?: boolean }) {
   return (
-    <View style={[s.stat, tint && { backgroundColor: C.tint, borderColor: '#C7D7FB' }]}>
+    <View style={[s.stat, tint && { backgroundColor: C.tint, borderColor: C.tintBorder }]}>
       <Text style={[s.statLabel, tint && { color: C.action }]}>{label}</Text>
       <Text style={[s.statValue, tint && { color: C.action }]}>{value}</Text>
     </View>
@@ -147,7 +147,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={kind === 'primary' ? '#fff' : C.action} />
+        <ActivityIndicator color={kind === 'primary' ? C.onAction : C.action} />
       ) : (
         <View style={s.btnRow}>
           {icon}
@@ -155,7 +155,7 @@ export function Button({
             style={[
               s.btnText,
               big && { fontSize: 18 },
-              kind === 'primary' && { color: '#fff' },
+              kind === 'primary' && { color: C.onAction },
               kind === 'secondary' && { color: C.text, fontWeight: '600' },
               kind === 'danger' && { color: C.danger },
               kind === 'link' && { color: C.action, textDecorationLine: 'underline' },
@@ -174,7 +174,7 @@ export function Input({ error, highlight, style, ...p }: TextInputProps & { erro
   return (
     <TextInput
       placeholderTextColor={C.placeholder}
-      style={[s.input, highlight && { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }, error && { borderColor: C.danger }, style]}
+      style={[s.input, highlight && { borderColor: C.highlight, backgroundColor: C.highlightTint }, error && { borderColor: C.danger }, style]}
       {...p}
     />
   );
@@ -240,7 +240,7 @@ export function Segmented<T extends string>({
     <View style={s.segment}>
       {options.map((o) => (
         <Pressable key={o.value} onPress={() => onChange(o.value)} style={[s.segmentItem, value === o.value && s.segmentActive]}>
-          <Text style={[s.segmentText, value === o.value && { color: '#fff' }]}>{o.label}</Text>
+          <Text style={[s.segmentText, value === o.value && { color: C.onAction }]}>{o.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -253,9 +253,9 @@ export function Toggle({ value, onChange, disabled }: { value: boolean; onChange
       value={value}
       onValueChange={onChange}
       disabled={disabled}
-      trackColor={{ false: '#CBD5E1', true: C.action }}
-      thumbColor="#fff"
-      {...(Platform.OS === 'web' ? ({ activeThumbColor: '#fff' } as any) : {})}
+      trackColor={{ false: C.track, true: C.action }}
+      thumbColor={C.card}
+      {...(Platform.OS === 'web' ? ({ activeThumbColor: C.card } as any) : {})}
     />
   );
 }
@@ -291,7 +291,7 @@ export function ListRow({ children, onPress, last }: { children: ReactNode; onPr
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [s.listRow, !last && { borderBottomWidth: 1, borderBottomColor: C.border }, pressed && onPress && { backgroundColor: '#F8FAFC' }]}
+      style={({ pressed }) => [s.listRow, !last && { borderBottomWidth: 1, borderBottomColor: C.border }, pressed && onPress && { backgroundColor: C.pressed }]}
     >
       {children}
     </Pressable>
@@ -343,8 +343,8 @@ export const s = StyleSheet.create({
   segmentItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   segmentActive: { backgroundColor: C.action },
   segmentText: { fontSize: 15, fontWeight: '700', color: C.text },
-  check: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: '#94A3B8', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  checkMark: { color: '#fff', fontWeight: '900', fontSize: 16, lineHeight: 18 },
+  check: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: C.checkBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: C.card },
+  checkMark: { color: C.onAction, fontWeight: '900', fontSize: 16, lineHeight: 18 },
   banner: { borderRadius: R.card, padding: 14, marginBottom: 14 },
   bannerTitle: { fontWeight: '700', fontSize: 16, marginBottom: 4 },
   listRow: { paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },

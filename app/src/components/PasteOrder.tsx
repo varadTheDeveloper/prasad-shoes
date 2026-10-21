@@ -336,8 +336,8 @@ export function PasteDuplicate({ s }: { s: PasteOrderState }) {
 
 const st = StyleSheet.create({
   pasteBig: { backgroundColor: C.action, borderRadius: R.card, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', marginBottom: 12 },
-  pasteBigText: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  pasteBigSub: { color: '#DCE6FF', fontSize: 13, marginTop: 4 },
+  pasteBigText: { color: C.onAction, fontSize: 20, fontWeight: '800' },
+  pasteBigSub: { color: C.onActionSub, fontSize: 13, marginTop: 4 },
   paste: {
     minHeight: 90,
     maxHeight: 360,

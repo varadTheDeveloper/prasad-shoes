@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { Button, Field, Input } from '@/components/ui';
-import { C } from '@/lib/theme';
+import { C, R } from '@/lib/theme';
 
 export default function Login() {
   const { login } = useAuth();
@@ -28,10 +28,7 @@ export default function Login() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.ground }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
         <View style={st.box}>
-          <View style={st.logo}>
-            <Text style={st.logoText}>PS</Text>
-          </View>
-          <Text style={st.title}>Prasad Shoes</Text>
+          <Image source={require('../../assets/logo.png')} style={st.logo} accessibilityLabel="Prasad Shoes" />
           <Text style={st.sub}>Orders and parcel labels</Text>
 
           <Field label="Mobile number">
@@ -52,10 +49,8 @@ export default function Login() {
 const st = StyleSheet.create({
   wrap: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   box: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  logo: { width: 84, height: 84, borderRadius: 42, backgroundColor: C.action, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  logoText: { color: '#fff', fontSize: 30, fontWeight: '800' },
-  title: { fontSize: 28, fontWeight: '700', color: C.text, textAlign: 'center', marginTop: 16 },
-  sub: { fontSize: 15, color: C.muted, textAlign: 'center', marginTop: 6, marginBottom: 28 },
+  logo: { width: 200, height: 200, borderRadius: R.card, alignSelf: 'center' },
+  sub: { fontSize: 15, color: C.muted, textAlign: 'center', marginTop: 10, marginBottom: 28 },
   hint: { textAlign: 'center', color: C.muted, marginTop: 18, fontSize: 14 },
   addr: { textAlign: 'center', color: C.muted, fontSize: 13, marginTop: 48 },
 });

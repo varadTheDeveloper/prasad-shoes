@@ -20,7 +20,7 @@
       "favicon": "./assets/favicon.png",
       "output": "single",
       "name": "Prasad Shoes",
-      "themeColor": "#1D4ED8"
+      "themeColor": "#7A3214"
     },
     "plugins": [
       "expo-router",

@@ -82,7 +82,7 @@ export function FromBlock({ shop, size = 15 }: { shop: LabelShop; size?: number 
 }
 
 const st = StyleSheet.create({
-  page: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#CBD5E1', aspectRatio: 210 / 297, flex: 1 },
+  page: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.inputBorder, aspectRatio: 210 / 297, flex: 1 },
   half: { flex: 1, justifyContent: 'flex-start' },
   cut: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#000' },
   t: { color: '#000' },
@@ -92,13 +92,13 @@ const st = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#94A3B8',
+    borderColor: C.checkBorder,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingTop: 22,
     paddingBottom: 12,
     marginBottom: 12,
   },
-  paperTag: { position: 'absolute', top: 6, left: 10, fontSize: 11, fontWeight: '700', color: '#64748B', letterSpacing: 0.5 },
+  paperTag: { position: 'absolute', top: 6, left: 10, fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.5 },
   line: { fontSize: 15, lineHeight: 21 },
 });

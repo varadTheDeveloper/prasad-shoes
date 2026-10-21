@@ -61,11 +61,11 @@ export function DuplicateSheet({
 }
 
 const st = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)' },
+  backdrop: { flex: 1, backgroundColor: C.backdrop },
   sheet: { backgroundColor: C.card, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: 24 },
   inner: { padding: 22, width: '100%', maxWidth: 560, alignSelf: 'center' },
   title: { fontSize: 22, fontWeight: '700', color: C.text, marginTop: 12, marginBottom: 12 },
-  match: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 14, marginBottom: 8, gap: 3 },
+  match: { backgroundColor: C.rowAlt, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 14, marginBottom: 8, gap: 3 },
   matchTitle: { fontSize: 16, fontWeight: '700', color: C.text },
   ask: { textAlign: 'center', color: C.muted, marginTop: 14, fontSize: 14 },
 });

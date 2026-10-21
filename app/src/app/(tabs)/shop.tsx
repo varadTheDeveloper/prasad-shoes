@@ -6,6 +6,7 @@ import { useIsAdmin } from '@/lib/auth';
 import { Banner, Button, Card, Field, Input, Loading, Muted, Page, SectionTitle } from '@/components/ui';
 import { FromBlock } from '@/components/LabelPreview';
 import type { ShopSettings } from '@shared/types';
+import { C } from '@/lib/theme';
 
 /** Screen 11 · Shop details – the "From" block printed on every label (owner only). */
 export default function Shop() {
@@ -68,7 +69,7 @@ export default function Shop() {
         <Input value={f.phones} onChangeText={set('phones')} keyboardType="default" />
       </Field>
       <SectionTitle>Label preview</SectionTitle>
-      <Card style={{ borderStyle: 'dashed', borderColor: '#94A3B8' }}>
+      <Card style={{ borderStyle: 'dashed', borderColor: C.checkBorder }}>
         <FromBlock shop={f} size={16} />
       </Card>
     </Page>

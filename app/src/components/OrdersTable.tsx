@@ -71,7 +71,7 @@ export function OrdersTable({
           renderItem={({ item: o, index }) => (
             <Pressable
               onPress={() => router.push(`/order/${o.id}`)}
-              style={({ pressed }) => [st.row, index % 2 === 1 && { backgroundColor: '#F8FAFC' }, pressed && { backgroundColor: C.tint }]}
+              style={({ pressed }) => [st.row, index % 2 === 1 && { backgroundColor: C.rowAlt }, pressed && { backgroundColor: C.tint }]}
             >
               {COLS.map((c) => (
                 <View key={c.key} style={[st.cellBox, { width: w(c.w) }]}>

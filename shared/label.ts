@@ -39,23 +39,27 @@ export function orderLine(o: LabelOrder): string {
 }
 
 /**
- * The "TO" block lines under the "TO, <name>" line: address, landmark, district/state, pincode, mobiles.
+ * The "TO" block lines under the "TO, <name>" line, in the shop's order:
+ * address, landmark, district, state, mobile, pincode (the COD / PREPAID line comes after these).
  * Nothing is printed twice: a pincode / mobile typed inside the address is left out of the address
  * (it has its own line), and a landmark / district / state already written in the address is skipped.
  */
 export function toLines(o: LabelOrder): string[] {
   const pins = [o.pincode];
   const mobs = [o.mobile1, o.mobile2];
-  const lines: string[] = [];
-  const address = stripContactInfo(o.address ?? '', pins, mobs);
-  for (const l of address.split('\n')) if (l.trim()) lines.push(l.trim());
-  const seen = () => lines.join(' ').toLowerCase();
+  const address = stripContactInfo(o.address ?? '', pins, mobs)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const landmark = stripContactInfo(o.landmark?.trim() ?? '', pins, mobs);
-  if (landmark && !seen().includes(landmark.toLowerCase())) lines.push(landmark);
-  const ds = [o.district?.trim(), o.state?.trim()].filter((x): x is string => !!x && !seen().includes(x.toLowerCase()));
-  if (ds.length) lines.push(ds.join(', '));
-  lines.push(`Pin code ${o.pincode}`);
+  const addrText = address.join(' ').toLowerCase();
+  const lines: string[] = [];
+  lines.push(...address);
+  if (landmark && !addrText.includes(landmark.toLowerCase())) lines.push(landmark);
+  const seen = () => lines.join(' ').toLowerCase();
+  for (const x of [o.district?.trim(), o.state?.trim()]) if (x && !seen().includes(x.toLowerCase())) lines.push(x);
   lines.push(`Mob. ${[...new Set(mobs.filter(Boolean))].join(', ')}`);
+  lines.push(`Pin code ${o.pincode}`);
   return lines;
 }
 

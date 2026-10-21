@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { Banner, Button, Card, Loading, Muted, Page, Pill, Row } from '@/components/ui';
-import { OrderForm, formFromOrder, toInput, validate, type FormKey, type FormState } from '@/components/OrderForm';
+import { OrderForm, emptyForm, formFromOrder, formToLabel, toInput, validate, type FormKey, type FormState } from '@/components/OrderForm';
+import { ToPreview } from '@/components/LabelPreview';
+import { AddressNotes, mismatchKey, usePinCheck } from '@/components/AddressChecks';
+import { findUnused } from '@shared/parser';
 import { dayTime } from '@/lib/format';
 import { C } from '@/lib/theme';
 import type { Order } from '@shared/types';
@@ -29,6 +32,13 @@ export default function OrderDetail() {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'danger'; text: string } | null>(null);
+  const [ignored, setIgnored] = useState<Set<string>>(new Set());
+  const [keptMismatch, setKeptMismatch] = useState<Set<string>>(new Set());
+  const pin = usePinCheck(form ?? emptyForm());
+  const unused = useMemo(
+    () => (form && o?.raw_message ? findUnused(o.raw_message, form as unknown as Record<string, string>).filter((l) => !ignored.has(l)) : []),
+    [form, o, ignored],
+  );
 
   useEffect(() => {
     if (o) setForm(formFromOrder(o));
@@ -58,6 +68,15 @@ export default function OrderDetail() {
   }
 
   const canEdit = !o.deleted_at && (editAll || (editOwn && o.created_by === me?.id));
+  const change = (k: FormKey, v: string) => {
+    setForm((f) => ({ ...f!, [k]: v }));
+    setConfirmDelete(false);
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
+  };
+  // District / State that do not match the pincode: asked, never changed without a tap.
+  const mm = pin.check?.mismatch;
+  const mmKey = mismatchKey(pin.check?.pincode ?? '', mm);
+  const mismatch = canEdit && mmKey && !keptMismatch.has(mmKey) ? mm : undefined;
 
   async function save() {
     const e = validate(form!, showAmount);
@@ -134,15 +153,27 @@ export default function OrderDetail() {
       {msg ? <Banner kind={msg.kind} text={msg.text} /> : null}
       {!canEdit && !o.deleted_at ? <Banner kind="info" text="You can view this order but not edit it." /> : null}
 
+      <ToPreview order={formToLabel(form)} />
+      <AddressNotes
+        check={pin.check}
+        failed={pin.failed}
+        unused={canEdit ? unused : []}
+        onAddToAddress={(l) => change('address', [form.address.trim(), l].filter(Boolean).join(', '))}
+        onIgnore={(l) => setIgnored((s) => new Set(s).add(l))}
+        mismatch={mismatch}
+        onUsePincode={() => {
+          if (mm?.district) change('district', mm.district.pincode);
+          if (mm?.state) change('state', mm.state.pincode);
+        }}
+        onKeepTyped={() => setKeptMismatch((k) => new Set(k).add(mmKey))}
+      />
+
       <View pointerEvents={canEdit ? 'auto' : 'none'} style={{ opacity: canEdit ? 1 : 0.85 }}>
         <OrderForm
           value={form}
-          onChange={(k: FormKey, v) => {
-            setForm((f) => ({ ...f!, [k]: v }));
-            setConfirmDelete(false);
-            if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
-          }}
+          onChange={change}
           errors={errors}
+          highlight={pin.check?.warnings.map((w) => w.field) ?? []}
           showAmount={showAmount}
         />
       </View>

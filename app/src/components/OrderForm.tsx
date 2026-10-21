@@ -1,6 +1,8 @@
 import { View } from 'react-native';
 import { Field, Input, Row, Segmented } from './ui';
 import type { Order, OrderInput, PaymentType } from '@shared/types';
+import type { LabelOrder } from '@shared/label';
+import { normaliseMobile } from '@shared/parser';
 import { DEFAULT_PAYMENT, FEATURES, effectivePayment } from '@shared/features';
 
 export interface FormState {
@@ -74,17 +76,38 @@ export function toInput(f: FormState, showAmount: boolean): OrderInput {
   return out;
 }
 
+/** The form as it will print on the label (same text the Word file uses). */
+export function formToLabel(f: FormState): LabelOrder {
+  const n = (v: string) => (v.trim() ? v.trim() : null);
+  return {
+    ship_name: f.ship_name.trim(),
+    address: f.address.trim(),
+    landmark: n(f.landmark),
+    district: n(f.district),
+    state: n(f.state),
+    pincode: f.pincode.replace(/\s/g, ''),
+    mobile1: normaliseMobile(f.mobile1) || f.mobile1.trim(),
+    mobile2: f.mobile2.trim() ? normaliseMobile(f.mobile2) || f.mobile2.trim() : null,
+    product_name: n(f.product_name),
+    size: n(f.size),
+    note: n(f.note),
+    payment_type: effectivePayment(f.payment_type),
+    amount: f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null,
+  };
+}
+
 /** Quick checks in the app (BRD ORD-06). The server checks the same rules again. */
 export function validate(f: FormState, showAmount: boolean): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.ship_name.trim()) e.ship_name = 'Enter name';
   if (!f.address.trim()) e.address = 'Enter address';
   if (!/^[1-9]\d{5}$/.test(f.pincode.replace(/\s/g, ''))) e.pincode = '6 digits, not starting with 0';
-  const m1 = f.mobile1.replace(/\D/g, '').replace(/^(91|0)(?=[6-9]\d{9}$)/, '');
-  if (!/^[6-9]\d{9}$/.test(m1)) e.mobile1 = '10 digits, starting 6–9';
+  const m1 = f.mobile1.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+  if (!/^\d{10}$/.test(m1)) e.mobile1 = 'Enter 10 digits';
   if (f.mobile2.trim()) {
-    const m2 = f.mobile2.replace(/\D/g, '').replace(/^(91|0)(?=[6-9]\d{9}$)/, '');
-    if (!/^[6-9]\d{9}$/.test(m2)) e.mobile2 = '10 digits, starting 6–9';
+    const m2 = f.mobile2.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+    if (!/^\d{10}$/.test(m2)) e.mobile2 = 'Enter 10 digits';
+    else if (m2 === m1) e.mobile2 = 'Same as Mobile 1 – leave empty or enter another number';
   }
   const amt = f.amount.replace(/[,₹\s]/g, '');
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).

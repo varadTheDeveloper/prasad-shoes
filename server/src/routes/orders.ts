@@ -28,7 +28,7 @@ const mobile = (required: boolean) =>
         return null;
       }
       const m = normaliseMobile(v);
-      if (!m) ctx.addIssue({ code: 'custom', message: '10 digits, starting 6–9' });
+      if (!m) ctx.addIssue({ code: 'custom', message: 'Enter 10 digits' });
       return m || null;
     });
 
@@ -69,6 +69,7 @@ function parseCreate(body: any) {
   const errs: Record<string, string> = {};
   if (!res.success) for (const i of res.error.issues) errs[i.path.join('.')] ??= i.message;
   if (effectivePayment(body?.payment_type ?? DEFAULT_PAYMENT) === 'COD' && !(Number(body?.amount) > 0)) errs.amount ??= 'Enter COD amount';
+  if (res.success && res.data.mobile2 && res.data.mobile2 === res.data.mobile1) errs.mobile2 ??= 'Same as Mobile 1 – leave empty or enter another number';
   if (Object.keys(errs).length || !res.success) {
     throw new HttpError(400, 'VALIDATION', 'Please check the highlighted fields', { fields: errs });
   }
@@ -182,32 +183,82 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(500),
 });
 
+/** WHERE clause for the order list filters (also used by "Select all" -> /orders/ids). */
+function listWhere(f: z.infer<typeof listQuery>, u: AuthUser) {
+  const where: string[] = [];
+  const p: unknown[] = [];
+  const add = (sql: string, v: unknown) => {
+    p.push(v);
+    where.push(sql.replace('?', `$${p.length}`));
+  };
+  if (f.deleted === '1') {
+    if (u.role !== 'ADMIN') throw forbidden('Only the owner can see deleted orders');
+    where.push('o.deleted_at IS NOT NULL');
+  } else where.push('o.deleted_at IS NULL');
+  if (f.from) add(`o.created_at >= ?::date`, f.from);
+  if (f.to) add(`o.created_at < (?::date + 1)`, f.to);
+  if (f.printed === 'yes') where.push('o.is_printed');
+  if (f.printed === 'no') where.push('NOT o.is_printed');
+  if (f.createdBy) add('o.created_by = ?', f.createdBy); // optional, not used by the app
+  if (f.q) {
+    const digits = f.q.replace(/\D/g, '');
+    if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
+    else add(`(o.ship_name ILIKE ? OR o.address ILIKE $${p.length + 1})`, `%${f.q.replace(/[%_]/g, '')}%`);
+  }
+  return { w: where.join(' AND '), p };
+}
+
+// GET /api/orders/ids?<same filters> -> ids of every matching order that can be printed (for "Select all").
+r.get(
+  '/ids',
+  h(async (req, res) => {
+    const f = listQuery.parse(req.query);
+    const { w, p } = listWhere({ ...f, deleted: '0' }, req.user);
+    const extra = can(req.user, 'LABEL_REPRINT') ? '' : ' AND NOT o.is_printed'; // only the owner prints again
+    const { rows } = await q(`SELECT o.id FROM orders o WHERE ${w}${extra} ORDER BY o.created_at DESC, o.id DESC LIMIT 5000`, p);
+    res.json({ ids: rows.map((x) => x.id) });
+  }),
+);
+
+// GET /api/orders/export?<same filters> -> CSV (opens in Excel) of every matching order. Owner only.
+const csv = (v: unknown) => {
+  const t = v === null || v === undefined ? '' : String(v);
+  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+r.get(
+  '/export',
+  requireAdmin,
+  h(async (req, res) => {
+    const f = listQuery.parse(req.query);
+    const { w, p } = listWhere(f, req.user);
+    const { rows } = await q(
+      `SELECT to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-Mon-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
+              o.district, o.state, o.pincode, o.mobile1, o.mobile2, cu.name AS added_by, o.is_printed
+         FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
+        ORDER BY o.created_at DESC, o.id DESC LIMIT 50000`,
+      p,
+    );
+    const head = ['Date', 'Customer', 'Address', 'Landmark', 'District', 'State', 'Pincode', 'Mobile 1', 'Mobile 2', 'Added by', 'Printed'];
+    const lines = rows.map((r) =>
+      [r.date, r.ship_name, r.address, r.landmark, r.district, r.state, r.pincode, r.mobile1, r.mobile2, r.added_by, r.is_printed ? 'Yes' : 'No']
+        .map(csv)
+        .join(','),
+    );
+    const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('X-File-Name', name);
+    res.setHeader('Access-Control-Expose-Headers', 'X-File-Name, Content-Disposition');
+    res.send('\ufeff' + [head.join(','), ...lines].join('\r\n')); // BOM: Excel shows Marathi / Hindi correctly
+  }),
+);
+
 r.get(
   '/',
   h(async (req, res) => {
     const f = listQuery.parse(req.query);
     const u = req.user;
-    const where: string[] = [];
-    const p: unknown[] = [];
-    const add = (sql: string, v: unknown) => {
-      p.push(v);
-      where.push(sql.replace('?', `$${p.length}`));
-    };
-    if (f.deleted === '1') {
-      if (u.role !== 'ADMIN') throw forbidden('Only the owner can see deleted orders');
-      where.push('o.deleted_at IS NOT NULL');
-    } else where.push('o.deleted_at IS NULL');
-    if (f.from) add(`o.created_at >= ?::date`, f.from);
-    if (f.to) add(`o.created_at < (?::date + 1)`, f.to);
-    if (f.printed === 'yes') where.push('o.is_printed');
-    if (f.printed === 'no') where.push('NOT o.is_printed');
-    if (f.createdBy) add('o.created_by = ?', f.createdBy); // optional, not used by the app
-    if (f.q) {
-      const digits = f.q.replace(/\D/g, '');
-      if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
-      else add(`(o.ship_name ILIKE ? OR o.address ILIKE $${p.length + 1})`, `%${f.q.replace(/[%_]/g, '')}%`);
-    }
-    const w = where.join(' AND ');
+    const { w, p } = listWhere(f, u);
     const total = await q(`SELECT count(*)::int AS n FROM orders o WHERE ${w}`, p);
     p.push(f.limit, (f.page - 1) * f.limit);
     const { rows } = await q(
@@ -249,6 +300,10 @@ r.put(
     next.payment_type = effectivePayment(next.payment_type);
     if (next.payment_type === 'COD' && !(Number(next.amount) > 0)) {
       throw new HttpError(400, 'VALIDATION', 'Enter COD amount', { fields: { amount: 'Enter COD amount' } });
+    }
+    if (next.mobile2 && next.mobile2 === next.mobile1) {
+      const msg = 'Same as Mobile 1 – leave empty or enter another number';
+      throw new HttpError(400, 'VALIDATION', msg, { fields: { mobile2: msg } });
     }
     await tx(async (c) => {
       await c.query(

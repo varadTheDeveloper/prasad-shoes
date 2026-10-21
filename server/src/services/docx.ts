@@ -81,10 +81,12 @@ function sizeFor(o: LabelOrder): number {
   return 20; // 10 pt
 }
 
-function toBlock(o: LabelOrder): Paragraph[] {
+function toBlock(o: LabelOrder, spaceBefore: number): Paragraph[] {
   const size = sizeFor(o);
   return [
-    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })]),
+    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], {
+      spacing: { before: spaceBefore, after: 0, line: 264 },
+    }),
     ...toLines(o).map((l) => para(AlignmentType.RIGHT, [run(l, size)])),
     // The COD / PREPAID line right under the TO address
     para(AlignmentType.RIGHT, [run(orderLine(o), size, { bold: true })], { spacing: { before: 160, after: 0, line: 264 } }),
@@ -101,23 +103,23 @@ function fromBlock(shop: LabelShop): Paragraph[] {
 const NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 const DASHED = { style: BorderStyle.DASHED, size: 8, color: '000000' };
 
-function cell(children: Paragraph[], align: typeof VerticalAlign.TOP | typeof VerticalAlign.BOTTOM, cutLineBelow = false, padTop = 120) {
+// No cell margins (padding): WPS Office adds them on top of the EXACT row height, which pushed the
+// bottom half onto the next page. The gaps come from paragraph spacing instead.
+function cell(children: Paragraph[], align: typeof VerticalAlign.TOP | typeof VerticalAlign.BOTTOM, cutLineBelow = false) {
   return new TableCell({
     children: children.length ? children : [new Paragraph({ children: [] })],
     verticalAlign: align,
     width: { size: COL_W, type: WidthType.DXA },
-    margins: { top: padTop, bottom: 160, left: 0, right: 0 },
     borders: { top: NONE, left: NONE, right: NONE, bottom: cutLineBelow ? DASHED : NONE },
   });
 }
 
 const row = (height: number, c: TableCell) => new TableRow({ height: { value: height, rule: HeightRule.EXACT }, cantSplit: true, children: [c] });
 
-/** One half of the page: TO block at the top (right), From block at the bottom (left). */
 /** One half of the page: TO block (right), the COD/PREPAID line, then From (left) right under it.
  *  The rest of the half stays blank, so there is plenty of room around the cut line. */
-function half(o: LabelOrder | null, shop: LabelShop, height: number, cutLineBelow: boolean, padTop: number): TableRow[] {
-  return [row(height, cell(o ? [...toBlock(o), ...fromBlock(shop)] : [], VerticalAlign.TOP, cutLineBelow, padTop))];
+function half(o: LabelOrder | null, shop: LabelShop, height: number, cutLineBelow: boolean, spaceBefore: number): TableRow[] {
+  return [row(height, cell(o ? [...toBlock(o, spaceBefore), ...fromBlock(shop)] : [], VerticalAlign.TOP, cutLineBelow))];
 }
 
 function pageTable(top: LabelOrder | null, bottom: LabelOrder | null, shop: LabelShop) {

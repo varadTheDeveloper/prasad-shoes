@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@react-native-community/datetimepicker": "9.2.1",
     "@tanstack/react-query": "^5.104.4",
     "expo": "~58.0.14",
     "expo-clipboard": "~58.0.3",

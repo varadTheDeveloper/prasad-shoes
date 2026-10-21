@@ -47,6 +47,21 @@ export function dayTime(iso: string): string {
   return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: TZ })}, ${time(iso)}`;
 }
 
+/** Always with the date: "20 Oct 2026, 6:56 pm". */
+export function dateTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: TZ })}, ${time(iso)}`;
+}
+
+/** Short: "20 Oct, 6:56 pm" (year added when not this year). */
+export function shortDateTime(iso: string): string {
+  const d = new Date(iso);
+  const y = d.toLocaleDateString('en-IN', { year: 'numeric', timeZone: TZ });
+  const thisYear = new Date().toLocaleDateString('en-IN', { year: 'numeric', timeZone: TZ });
+  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(y === thisYear ? {} : { year: 'numeric' }), timeZone: TZ });
+  return `${day}, ${time(iso)}`;
+}
+
 export function longDate(): string {
   return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ });
 }

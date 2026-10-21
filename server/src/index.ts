@@ -1,8 +1,14 @@
 import { createApp } from './app';
 import { env } from './env';
+import { preloadPincodes } from './services/pincode';
 
 // Listen on localhost only: Nginx is the only thing that talks to the API from outside.
 const host = process.env.HOST ?? '127.0.0.1';
+try {
+  console.log(`India Post pincode list: ${preloadPincodes()} pincodes`);
+} catch (e) {
+  console.warn('[warn] Pincode check is off:', (e as Error).message);
+}
 createApp().listen(env.port, host, () => {
   console.log(`Prasad Shoes API listening on http://${host}:${env.port}`);
 });

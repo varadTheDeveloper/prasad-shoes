@@ -37,7 +37,7 @@ r.get(
 
 const mobileField = z.string().transform((v, ctx) => {
   const m = normaliseMobile(v);
-  if (!m) ctx.addIssue({ code: 'custom', message: '10-digit mobile, starting 6–9' });
+  if (!m) ctx.addIssue({ code: 'custom', message: 'Enter a 10-digit mobile' });
   return m;
 });
 

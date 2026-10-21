@@ -128,9 +128,9 @@ function fuzzyLabel(raw: string): { key: Key; rest: string } | null {
       rest = rest.slice(n[0].length);
     }
     // Only a label if a phone number follows (or the number is on the next line).
-    if (cleanValue(rest) && findMobiles(rest).length === 0) return null;
+    if (cleanValue(rest) && !hasNumber(rest)) return null;
   }
-  if (key === 'pincode' && cleanValue(rest) && !findPincode(rest)) return null;
+  if (key === 'pincode' && cleanValue(rest) && !hasNumber(rest)) return null;
   return { key, rest };
 }
 
@@ -150,16 +150,28 @@ export function normaliseMobile(s: string): string {
   let d = toAsciiDigits(s).replace(/\D/g, '');
   if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
   if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
-  return /^[6-9]\d{9}$/.test(d) ? d : '';
+  return /^\d{10}$/.test(d) ? d : ''; // any 10 digits (the shop does not want the 6–9 rule)
 }
 
-const MOBILE_RE = /(?<![\d])(?:\+?\s?91[\s-]?|0)?([6-9]\d{4})[\s-]?(\d{5})(?![\d])/g;
+const MOBILE_RE = /(?<![\d])(?:\+?\s?91[\s-]?|0)?(\d{5})[\s-]?(\d{5})(?![\d])/g;
 const PIN_RE = /(?<![\d])([1-9]\d{2})\s?(\d{3})(?![\d])/;
 
 function findMobiles(s: string): string[] {
   const out: string[] = [];
   for (const m of toAsciiDigits(s).matchAll(MOBILE_RE)) out.push(m[1] + m[2]);
   return out;
+}
+
+/** A number of 5+ digits (a phone or pincode, right or wrong). */
+const hasNumber = (s: string) => /\d{5,}/.test(toAsciiDigits(s).replace(/(?<=\d)[\s-](?=\d)/g, ''));
+
+/** Numbers written after a phone label that are not valid Indian mobiles ("0000000000"),
+ *  kept as typed (digits only) so the form shows them in red instead of losing them. */
+function rawNumbers(s: string): string[] {
+  return toAsciiDigits(s)
+    .split(/[,/;|]|\s(?:or|and|&)\s/i)
+    .map((x) => x.replace(/\D/g, ''))
+    .filter((x) => x.length >= 5);
 }
 
 function findPincode(s: string): string {
@@ -235,6 +247,49 @@ export function stateFromPincode(pin: string): string {
   return PIN_STATE_3[pin.slice(0, 3)] ?? PIN_STATE_2[pin.slice(0, 2)] ?? '';
 }
 
+/** The message split into lines, without WhatsApp time / sender prefixes and bullets. */
+function messageLines(text: string): string[] {
+  return (text ?? '')
+    .replace(/\r/g, '')
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '') // invisible direction marks WhatsApp adds
+    .split('\n')
+    .map((l) => l.replace(WA_PREFIX, '').replace(WA_PREFIX2, '').replace(TRAILING_TIME, '').replace(/^[\s*•▪●·]+/, '').trim());
+}
+
+const isNoise = (raw: string) => TIME_ONLY.test(raw) || NOISE.some((r) => r.test(raw));
+
+/** "₹1,599.00 (estimated total)", "Total 1599", "1599" -> 1599, otherwise null. */
+function amountOf(raw: string, current: Key | null): { amount: number | null } | null {
+  const rs = raw.match(AMOUNT_RS);
+  if (rs && (/estimated total|total|amount|cod|₹/i.test(raw) || raw.length < 20)) return { amount: parseAmount(rs[1]) };
+  const aw = raw.match(AMOUNT_WORDS);
+  if (aw) return { amount: parseAmount(aw[1]) };
+  if (AMOUNT_BARE.test(raw) && current !== 'size' && current !== 'pincode') return { amount: parseAmount(raw.match(AMOUNT_BARE)![1]) };
+  return null;
+}
+
+/** Labelled line? Exact label first, then a misspelt one ("Landmmark", "Adress", "Pincod", "Mobil no1"). */
+function labelOf(raw: string): { key: Key; rest: string } | null {
+  return LABELS.some(({ re }) => re.test(raw)) ? labelOfExact(raw) : fuzzyLabel(raw);
+}
+
+/** Exact label. A line that starts like a label but isn't one ("Mobile shop lane") is not a label,
+ *  and is then not checked for a misspelt label either. */
+function labelOfExact(raw: string): { key: Key; rest: string } | null {
+  for (const { key, re } of LABELS) {
+    const m = raw.match(re);
+    if (m) {
+      const rest = raw.slice(m[0].length);
+      // "Mobile shop lane" is an address line, not a phone label: keep it so nothing is lost.
+      const v = cleanValue(rest);
+      // "Mobile shop lane" (no number after it) is an address line, not a phone label.
+      if (v && (key === 'mobile1' || key === 'mobile2' || key === 'pincode') && !hasNumber(v)) return null;
+      return { key, rest };
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
@@ -245,11 +300,7 @@ export function parseWhatsApp(text: string): ParseResult {
   let amount: number | null = null;
   const loose: string[] = []; // unlabelled content lines, in order
 
-  const lines = (text ?? '')
-    .replace(/\r/g, '')
-    .replace(/[‎‏‪-‮⁦-⁩﻿]/g, '') // invisible direction marks WhatsApp adds
-    .split('\n')
-    .map((l) => l.replace(WA_PREFIX, '').replace(WA_PREFIX2, '').replace(TRAILING_TIME, '').replace(/^[\s*•▪●·]+/, '').trim());
+  const lines = messageLines(text);
 
   let current: Key | null = null; // label waiting for its value on the next line(s)
   let currentTook = 0;
@@ -257,7 +308,8 @@ export function parseWhatsApp(text: string): ParseResult {
   const setField = (key: Key, value: string, append: boolean) => {
     if (!value) return;
     if (key === 'mobile1' || key === 'mobile2') {
-      const ms = findMobiles(value);
+      let ms = findMobiles(value);
+      if (ms.length === 0) ms = rawNumbers(value); // wrong number: keep it, the form marks it red
       if (ms.length === 0) return;
       // A "Mobile" line may hold two numbers: "8106093098 / 9876543210"
       if (key === 'mobile1') {
@@ -269,7 +321,7 @@ export function parseWhatsApp(text: string): ParseResult {
       return;
     }
     if (key === 'pincode') {
-      const p = findPincode(value);
+      const p = findPincode(value) || rawNumbers(value)[0] || '';
       if (p) f.pincode = p;
       return;
     }
@@ -288,22 +340,12 @@ export function parseWhatsApp(text: string): ParseResult {
       current = null;
       continue;
     }
-    if (TIME_ONLY.test(raw) || NOISE.some((r) => r.test(raw))) continue;
+    if (isNoise(raw)) continue;
 
     // Amount lines: "₹1,599.00 (estimated total)", "Total 1599", "1599"
-    const rs = raw.match(AMOUNT_RS);
-    if (rs && (/estimated total|total|amount|cod|₹/i.test(raw) || raw.length < 20)) {
-      if (amount === null) amount = parseAmount(rs[1]);
-      continue;
-    }
-    const aw = raw.match(AMOUNT_WORDS);
-    if (aw) {
-      if (amount === null) amount = parseAmount(aw[1]);
-      continue;
-    }
-    if (AMOUNT_BARE.test(raw) && current !== 'size' && current !== 'pincode') {
-      const m = raw.match(AMOUNT_BARE)!;
-      if (amount === null) amount = parseAmount(m[1]);
+    const am = amountOf(raw, current);
+    if (am) {
+      if (amount === null) amount = am.amount;
       continue;
     }
 
@@ -317,24 +359,8 @@ export function parseWhatsApp(text: string): ParseResult {
 
     // Labelled line? Exact label first, then a misspelt one ("Landmmark", "Adress", "Pincod", "Mobil no1").
     let matched = false;
-    const hits: { key: Key; rest: string }[] = [];
-    for (const { key, re } of LABELS) {
-      const m = raw.match(re);
-      if (m) {
-        const rest = raw.slice(m[0].length);
-        // "Mobile shop lane" is an address line, not a phone label: keep it so nothing is lost.
-        const v = cleanValue(rest);
-        if (v && (key === 'mobile1' || key === 'mobile2') && findMobiles(v).length === 0) break;
-        if (v && key === 'pincode' && !findPincode(v)) break;
-        hits.push({ key, rest });
-        break;
-      }
-    }
-    if (!hits.length && !LABELS.some(({ re }) => re.test(raw))) {
-      const fz = fuzzyLabel(raw);
-      if (fz) hits.push(fz);
-    }
-    for (const { key, rest } of hits) {
+    const hit = labelOf(raw);
+    for (const { key, rest } of hit ? [hit] : []) {
       matched = true;
       const value = cleanValue(rest);
       if (value) {
@@ -398,8 +424,8 @@ export function parseWhatsApp(text: string): ParseResult {
   }
   if (!f.address && looseKept.length) {
     f.address = looseKept.join(', ');
-  } else if (f.address && looseKept.length && !f.landmark) {
-    // Extra unlabelled lines after a labelled address: keep them, nothing is lost.
+  } else if (f.address && looseKept.length) {
+    // Extra unlabelled lines after a labelled address (or landmark): keep them, nothing is lost.
     f.address = [f.address, ...looseKept].join(', ');
   }
   // Pincode written inside the address line: "..., Solapur 413255"
@@ -432,6 +458,57 @@ export function parseWhatsApp(text: string): ParseResult {
   const missing = required.filter((k) => !f[k as Key]);
 
   return { ...f, amount, filled, missing, guessed };
+}
+
+// ---------------------------------------------------------------------------------------------
+// "Not used" check: every line of the pasted message must end up in some field of the form.
+// A line with words or numbers that are in no field is returned, so the person saving sees it
+// before the label is printed. Labels ("Address -"), chat noise and amount lines are skipped.
+// ---------------------------------------------------------------------------------------------
+const IGNORE_WORDS = new Set(
+  [
+    'no', 'nos', 'number', 'num', 'nbr', 'nmbr', 'pin', 'code', 'cod', 'pincode', 'mob', 'mobile', 'ph', 'phone', 'cell', 'contact',
+    'uk', 'ind', '91', '0', 'to', 'dist', 'distt', 'district', 'state', 'size', 'landmark', 'address', 'naam', 'name',
+    'प्रति', 'नं', 'नंबर', 'क्र', 'पिन', 'कोड', 'पिनकोड', 'मोबाईल', 'मोबाइल', 'फोन', 'जिल्हा', 'जिला', 'राज्य', 'साइज', 'साईज', 'नाव', 'नाम', 'पत्ता', 'पता',
+  ].map((w) => w.toLowerCase()),
+);
+const tokens = (s: string) => toAsciiDigits(s).toLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+
+export function findUnused(text: string, fields: Partial<Record<string, string | number | null | undefined>>): string[] {
+  const values = Object.values(fields)
+    .filter((v) => v !== null && v !== undefined && v !== '')
+    .map(String);
+  const known = new Set(values.flatMap(tokens));
+  const digits = values.map((v) => toAsciiDigits(v).replace(/\D/g, '')).filter(Boolean).join(' ');
+  const out: string[] = [];
+  let current: Key | null = null;
+  for (const raw of messageLines(text)) {
+    if (!raw) {
+      current = null;
+      continue;
+    }
+    if (isNoise(raw)) continue;
+    if (amountOf(raw, current)) continue;
+    let value = raw;
+    const to = raw.match(/^to\s*(?:[,:\-]\s*|\s+)(.+)$/i);
+    const hit = to ? null : labelOf(raw);
+    if (to) value = to[1];
+    else if (hit) {
+      value = hit.rest;
+      current = cleanValue(hit.rest) ? null : hit.key;
+      // Phone / pincode / size / name lines: the field has its own box; if it has a value, the person saw it.
+      // (A phone line with more numbers than the two phone boxes is still checked.)
+      const fits = hit.key === 'mobile1' ? rawNumbers(hit.rest).length <= 2 : rawNumbers(hit.rest).length <= 1;
+      if (hit.key !== 'address' && hit.key !== 'landmark' && fits && String(fields[hit.key] ?? '').trim()) continue;
+    }
+    const missing = tokens(cleanValue(value)).filter((t) => {
+      if (IGNORE_WORDS.has(t) || known.has(t)) return false;
+      if (/^\d+$/.test(t)) return !digits.includes(t.replace(/^(?:91|0)(?=\d{10}$)/, '')); // 09422… / 919422… = 9422…
+      return true;
+    });
+    if (missing.length) out.push(raw);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

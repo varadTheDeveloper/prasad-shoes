@@ -5,7 +5,12 @@ import { getToken } from './storage';
  * Website: same server as the page ('' = /api on this domain).
  * Android app / local development: EXPO_PUBLIC_API_URL, e.g. https://prasadshoes.in
  */
-export const API_URL = (Platform.OS === 'web' && !__DEV__ ? '' : process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+const ENV_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+// Website: same server as the page in production (Nginx). In development the .env address is for the
+// Android emulator (10.0.2.2 = this PC), so the browser uses this PC's own name (localhost) instead.
+export const API_URL = (
+  Platform.OS === 'web' ? (__DEV__ ? ENV_URL.replace('10.0.2.2', globalThis.location?.hostname || 'localhost') : '') : ENV_URL
+).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(

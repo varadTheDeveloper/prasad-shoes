@@ -140,10 +140,16 @@ A new APK is needed only when screens change. Server changes (Step 3) reach the 
 ## Daily use (for the shop)
 
 1. Customer fills the address template on WhatsApp.
-2. Staff long-press the messages → **Copy** → in the app tap **New order** → paste (or "Paste from clipboard").
-3. Check the fields (yellow = please check) → add product / note / size → **Save order**.
+2. Staff long-press the message → **Copy** → open the app → tap **Paste from WhatsApp** on Home.
+3. Look at the **WILL PRINT** box: that is exactly what goes on the label. Fix anything in the form below it.
+   - Green **✓ Pincode … · District, State** = the pincode is in the India Post list.
+   - Red = the pincode does not exist. Orange = a line of the message was **Not used**.
+   - With a red / orange note, the first **Save** asks you to check; tap **Checked – Save order** to save.
 4. Same message pasted twice? The app shows **"Already saved by Rahul at 12:41 pm"**.
-5. Evening: **Home → Print labels** → all unprinted orders are ticked → **Download Word** → print.
+5. Evening: **Home → Print today's labels** → **Download Word file** → print. (Older unprinted orders: Orders screen.)
+
+The pincode list is `server/data/pincodes.json` (India Post directory from data.gov.in, 19,307 pincodes).
+A very new pincode may be missing: then the app only warns, it never blocks saving.
 
 ---
 

@@ -21,7 +21,7 @@ test('already-saved order with pincode + mobile inside the address (screenshot 1
     pincode: '413255',
     mobile1: '7276052601',
   });
-  assert.deepEqual(lines, ['कोंडी गाव, उत्तर सोलापूर जिल्हा सोलापूर', 'Maharashtra', 'Pin code 413255', 'Mob. 7276052601']);
+  assert.deepEqual(lines, ['कोंडी गाव, उत्तर सोलापूर जिल्हा सोलापूर', 'Maharashtra', 'Mob. 7276052601', 'Pin code 413255']);
 });
 
 test('already-saved order, spaces in the number (screenshot 2)', () => {
@@ -48,10 +48,10 @@ test('state / district / landmark already in the address are not printed again',
     mobile1: '8106093098',
     mobile2: '8106093098',
   });
-  assert.deepEqual(lines, ['Vill Tekumatla, Jaipur mandal, Manchiryal, Telangana', 'Pin code 504216', 'Mob. 8106093098']);
+  assert.deepEqual(lines, ['Vill Tekumatla, Jaipur mandal, Manchiryal, Telangana', 'Mob. 8106093098', 'Pin code 504216']);
 });
 
-test('normal order prints every line once', () => {
+test('normal order prints every line once, in the shop order: address, landmark, district, state, mobile, pincode', () => {
   const lines = toLines({
     ...base,
     address: 'Raj nivas, rajapur, udgir, latur',
@@ -65,8 +65,16 @@ test('normal order prints every line once', () => {
     'Raj nivas, rajapur, udgir, latur',
     'Near grampanchaya',
     'Maharashtra',
-    'Pin code 413578',
     'Mob. 8463995363, 8495898999',
+    'Pin code 413578',
+  ]);
+  // District and state each on their own line
+  assert.deepEqual(toLines({ ...base, address: 'Kondi gaon', district: 'Solapur', state: 'Maharashtra', pincode: '413255', mobile1: '7276052603' }), [
+    'Kondi gaon',
+    'Solapur',
+    'Maharashtra',
+    'Mob. 7276052603',
+    'Pin code 413255',
   ]);
 });
 

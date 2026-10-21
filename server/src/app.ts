@@ -8,6 +8,7 @@ import orderRoutes from './routes/orders';
 import labelRoutes from './routes/labels';
 import userRoutes, { permissionsRouter } from './routes/users';
 import shopRoutes, { statsRouter } from './routes/shop';
+import pincodeRoutes from './routes/pincode';
 import { pool } from './db';
 
 export function createApp() {
@@ -48,6 +49,7 @@ export function createApp() {
   app.use('/api/permissions', requireAuth, permissionsRouter);
   app.use('/api/shop', requireAuth, shopRoutes);
   app.use('/api/stats', requireAuth, statsRouter);
+  app.use('/api/pincode', requireAuth, pincodeRoutes);
   app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'No such API' } }));
   app.use(errorHandler);
   return app;

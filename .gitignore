@@ -4,3 +4,9 @@ dist/
 .env.development
 *.log
 .expo/
+
+# keys and signing files - never upload
+*.pem
+*.jks
+*.keystore
+credentials.json

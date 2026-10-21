@@ -42,6 +42,32 @@ export function PagePreview({ labels, shop, scale = 1 }: { labels: (LabelOrder |
   );
 }
 
+/**
+ * The TO block of one label exactly as it will be printed (same lines as the Word file):
+ * shown on the paste screen so the person saving checks the real label, not just the fields.
+ */
+export function ToPreview({ order }: { order: LabelOrder }) {
+  const empty = !order.ship_name && !order.address;
+  return (
+    <View style={st.paper}>
+      <Text style={st.paperTag}>WILL PRINT</Text>
+      {empty ? (
+        <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 18 }]}>The label appears here after you paste</Text>
+      ) : (
+        <View>
+          <Text style={[st.t, st.b, st.r, st.line]}>TO, {order.ship_name || '—'}</Text>
+          {toLines(order).map((l, j) => (
+            <Text key={j} style={[st.t, st.r, st.line]}>
+              {l}
+            </Text>
+          ))}
+          <Text style={[st.t, st.b, st.r, st.line, { marginTop: 6 }]}>{orderLine(order)}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function FromBlock({ shop, size = 15 }: { shop: LabelShop; size?: number }) {
   return (
     <View>
@@ -62,4 +88,17 @@ const st = StyleSheet.create({
   t: { color: '#000' },
   b: { fontWeight: '700' },
   r: { textAlign: 'right' },
+  paper: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#94A3B8',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingTop: 22,
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  paperTag: { position: 'absolute', top: 6, left: 10, fontSize: 11, fontWeight: '700', color: '#64748B', letterSpacing: 0.5 },
+  line: { fontSize: 15, lineHeight: 21 },
 });

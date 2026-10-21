@@ -26,3 +26,21 @@ export async function setToken(token: string | null): Promise<void> {
     // storage unavailable: the user just logs in again next time
   }
 }
+
+/** Small settings remembered on this device (e.g. Orders List / Table). */
+export async function getPref(key: string): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web') return globalThis.localStorage?.getItem(`ps_${key}`) ?? null;
+    return await SecureStore.getItemAsync(`ps_${key}`);
+  } catch {
+    return null;
+  }
+}
+export async function setPref(key: string, value: string): Promise<void> {
+  try {
+    if (Platform.OS === 'web') globalThis.localStorage?.setItem(`ps_${key}`, value);
+    else await SecureStore.setItemAsync(`ps_${key}`, value);
+  } catch {
+    // not remembered: fine
+  }
+}

@@ -78,6 +78,34 @@ test('validation: missing pincode / bad mobile', { skip }, async () => {
   assert.ok(!r.data.error.fields.amount, 'amount is optional');
 });
 
+test('the same number in Mobile 1 and Mobile 2 is refused (new order and edit)', { skip }, async () => {
+  const m = rnd();
+  const r = await call('POST', '/orders', order({ mobile1: m, mobile2: `+91 ${m}` }), staff);
+  assert.equal(r.status, 400);
+  assert.match(r.data.error.fields.mobile2, /Same as Mobile 1/);
+  const ok = await call('POST', '/orders', order({ mobile1: m }), staff);
+  assert.equal(ok.status, 201, JSON.stringify(ok.data));
+  const ed = await call('PUT', `/orders/${ok.data.id}`, { mobile2: m }, staff);
+  assert.equal(ed.status, 400);
+  assert.ok(ed.data.error.fields.mobile2);
+});
+
+test('pincode check: India Post list, wrong pincode (red), other district (no note)', { skip }, async () => {
+  const good = await call('POST', '/pincode/check', { pincode: '413255', address: 'कोंडी गाव, उत्तर सोलापूर' }, staff);
+  assert.equal(good.status, 200);
+  assert.deepEqual(good.data.districts, ['Solapur']);
+  assert.equal(good.data.state, 'Maharashtra');
+  assert.deepEqual(good.data.warnings, []);
+  const fake = await call('POST', '/pincode/check', { pincode: '413578', address: 'Raj nivas, udgir, latur' }, staff);
+  assert.equal(fake.data.found, false);
+  assert.equal(fake.data.warnings[0].level, 'danger');
+  const other = await call('POST', '/pincode/check', { pincode: '413526', address: 'patil bunglow, malkapur, udgir, latur' }, staff);
+  assert.deepEqual(other.data.warnings, []); // no orange note
+  assert.equal(other.data.addressNamesOtherDistrict, true);
+  const noLogin = await call('POST', '/pincode/check', { pincode: '413255' });
+  assert.equal(noLogin.status, 401);
+});
+
 test('amount is optional: blank, null or missing all save, and stay blank', { skip }, async () => {
   for (const amount of ['', null, undefined]) {
     const o: any = order({ amount });
@@ -204,6 +232,28 @@ test('300 orders -> one Word file with 150 pages (2 per page); reprint needs LAB
   assert.equal(ownerAgain.status, 200);
   const printed = await call('GET', `/orders/${ids[0]}`, undefined, owner);
   assert.equal(printed.data.is_printed, true);
+});
+
+test('Select all: /orders/ids returns every matching order (not just one page); staff skip printed', { skip }, async () => {
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const list = await call('GET', `/orders?from=${day}&to=${day}&limit=5&page=1`, undefined, owner);
+  assert.equal(list.data.orders.length, Math.min(5, list.data.total));
+  const ids = await call('GET', `/orders/ids?from=${day}&to=${day}`, undefined, owner);
+  assert.equal(ids.data.ids.length, list.data.total); // owner can reprint: all of them
+  const sIds = await call('GET', `/orders/ids?from=${day}&to=${day}`, undefined, staff);
+  const notPrinted = await call('GET', `/orders?from=${day}&to=${day}&printed=no&limit=1`, undefined, staff);
+  assert.equal(sIds.data.ids.length, notPrinted.data.total); // staff: printed ones left out
+});
+
+test('Excel export (CSV): owner gets every matching order, staff cannot', { skip }, async () => {
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const r = await call('GET', `/orders/export?from=${day}&to=${day}`, undefined, owner);
+  assert.equal(r.status, 200);
+  const text = Buffer.from(r.data).toString('utf8');
+  assert.ok(text.startsWith('\ufeffDate,Customer,Address'));
+  const list = await call('GET', `/orders?from=${day}&to=${day}&limit=1`, undefined, owner);
+  assert.equal(text.trim().split('\r\n').length - 1, list.data.total);
+  assert.equal((await call('GET', `/orders/export?from=${day}&to=${day}`, undefined, staff)).status, 403);
 });
 
 test('stats for home screens', { skip }, async () => {

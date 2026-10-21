@@ -315,3 +315,72 @@ Address - Plot 7, Gandhi chowk, Latur Pin code: 413512 Mob no 9850011223 / 98500
     { address: 'Plot 7, Gandhi chowk, Latur', pincode: '413512', mobile1: '9850011223', mobile2: '9850011224' },
   );
 });
+
+// ------------------------------------------------------------- "Not used" lines (findUnused)
+import { findUnused } from '../parser';
+
+const unused = (text: string) => findUnused(text, parseWhatsApp(text) as unknown as Record<string, string>);
+
+test('every message in this file: no line is lost', () => {
+  const all = [
+    `Naam - Sudharshan\nAddress - Vill Tekumatla, Jaipur mandal\nLandmark - Ups school Tekumatla\nState - Telangana\nPincode - 504216\nMobile No 1. 8106093098\nMobile no 2.\n\nSize 10`,
+    `You\n₹1,599.00 (estimated total)\n1599\n12:39 pm\nAddress Details\n\nNaam\nAddress\nLandmark ( NEARBY SCHOOL, ROAD , CHOWK )\nState\nPincode -\nMobile No 1.\nMobile no 2.\n\nSize\n12:39 pm\nNaam - Sudharshan\nAddress - Vill Tekumatla, Jaipur mandal\nLandmark - Ups school Tekumatla\nPincode - 504216\nMobile No 1. 8106093098\nSize - 10\n12:52 pm`,
+    `TO, Devidas shinde\nकोंडी गाव\nउत्तर सोलापूर जिल्हा सोलापूर\nपिन कोड 413255\n+91 72760 52603`,
+    `नाव\nरमेश पाटील\nपत्ता\nमु. पो. वडगाव, ता. हवेली\nजिल्हा - पुणे\nपिन कोड - ४१२३०८\nमोबाईल नंबर 1 - ९८२२०१२३४५\nसाइज - ८`,
+    `नाम: सुरेश कुमार\nपता: गांव रामपुर, पोस्ट सिकंदरपुर\nराज्य: उत्तर प्रदेश\nपिन: 221001\nमोबाइल: 9415012345, 7007012345`,
+    `Sanjay More\nAt post Kurundwad, Tal Shirol\nNear Shivaji chowk\nKolhapur\n416106\n9890012345\n9`,
+    `[12:41 pm, 18/10/2026] Ganesh: Name - Ganesh Jadhav\n[12:41 pm, 18/10/2026] Ganesh: Address - Flat 12, Sai Residency, Wakad\n[12:42 pm, 18/10/2026] Ganesh: Pin code 411057\n[12:42 pm, 18/10/2026] Ganesh: Mob 98220 11223\n[12:42 pm, 18/10/2026] Ganesh: Size 9 no`,
+    `Name : Priya Deshmukh\nAddress :\nHouse no 45, Gandhi nagar\nBehind bus stand\nLandmark: Zilla parishad school\nDist: Latur\nPincode: 413512\nMobile: 09422012345\nAlternate no: 8888012345`,
+    `Rahul Pawar\nShivaji peth, Satara 415002\n7020012345`,
+    `Naam Mohan Raj\nAddress  Raj nivas, rajapur, udgir, latur\nLandmmark Near grampanchaya\nState Maharashtra\nPincode 413578\nMobile no1 8463995363\nMobile no2 8495898999`,
+    `Nmae - Sunil Gaikwad\nAdress - Gat no 12, Shirur\nLanmark - Behind Hanuman mandir\nDistric - Pune\nSate - Maharashtra\nPincod - 412210\nMobil no 1 - 9850012345\nMobaile no.2 - 7350012345\nSise - 8`,
+    `Name: Kavita Jadhav\nAddres:\nFlat 4, Shanti Apartment\nKothrud\nLand mark: Near D-Mart\nPin cod: 411038\nContact no: 9922012345`,
+    `Mobin Shaikh\nStatue road, Sangli\nMobile shop lane\n416416\n9890011122`,
+    `TO, Devidas shinde\nकोंडी गाव, उत्तर सोलापूर जिल्हा सोलापूर पिन कोड 413255 +91 72760-52601`,
+    `Name - Asha More\nAddress - Plot 7, Gandhi chowk, Latur Pin code: 413512 Mob no 9850011223 / 9850011224`,
+  ];
+  for (const m of all) assert.deepEqual(unused(m), [], m);
+});
+
+test('a third phone number has no field: shown as not used', () => {
+  assert.deepEqual(unused(`Name - Amit Kale\nAddress - Plot 9, Shivaji nagar, Latur\nPincode 413512\nMob 9850011223, 9850011224, 9850011225`), [
+    'Mob 9850011223, 9850011224, 9850011225',
+  ]);
+});
+
+test('extra lines after Address + Landmark are kept in the address (nothing lost)', () => {
+  const text = `Name - Amit Kale\nAddress - Plot 9, Shivaji nagar\nLandmark - Near Hanuman mandir\n\nTaluka Udgir, Dist Latur\nPincode 413517\nMob 9850011223`;
+  const r = parseWhatsApp(text);
+  assert.equal(r.address, 'Plot 9, Shivaji nagar, Taluka Udgir, Dist Latur');
+  assert.deepEqual(unused(text), []);
+});
+
+test('text deleted from the form shows up as not used', () => {
+  const text = `Name - Amit Kale\nAddress - Plot 9, Shivaji nagar, Udgir\nPincode 413517\nMob 9850011223`;
+  const form = { ...parseWhatsApp(text), address: 'Plot 9, Shivaji nagar' };
+  assert.deepEqual(findUnused(text, form as unknown as Record<string, string>), ['Address - Plot 9, Shivaji nagar, Udgir']);
+});
+
+test('wrong phone numbers after "Mobile No1:" stay in the phone fields, not in the address (Amit Patil)', () => {
+  const text = `Name: Amit Patil
+Address: Patil Bunglow, Malkapur, Udgir, Latur
+Landmark: Near Gram Panchayat
+State: Maharashtra
+Pincode: 413526
+Mobile No1: 0000000000
+Mobile No2: 1111111111`;
+  const r = check(text, {
+    ship_name: 'Amit Patil',
+    address: 'Patil Bunglow, Malkapur, Udgir, Latur',
+    landmark: 'Near Gram Panchayat',
+    state: 'Maharashtra',
+    pincode: '413526',
+    mobile1: '0000000000', // any 10 digits are accepted
+    mobile2: '1111111111',
+  });
+  assert.deepEqual(findUnused(text, r as unknown as Record<string, string>), []);
+});
+
+test('a 5-digit pincode after "Pincode:" stays in the pincode field (shown in red), not in the address', () => {
+  check(`Name: Amit Patil\nAddress: Plot 4, Udgir\nPincode: 41352\nMobile: 9850011223`, { address: 'Plot 4, Udgir', pincode: '41352', mobile1: '9850011223' });
+});

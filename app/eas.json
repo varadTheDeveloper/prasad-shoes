@@ -3,11 +3,11 @@
   "build": {
     "apk": {
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://YOUR-DOMAIN" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://13-203-156-41.sslip.io" }
     },
     "production": {
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://YOUR-DOMAIN" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://13-203-156-41.sslip.io" }
     }
   }
 }

@@ -10,7 +10,7 @@
     "android": {
       "package": "in.prasadshoes.labels",
       "adaptiveIcon": {
-        "backgroundColor": "#1D4ED8",
+        "backgroundColor": "#F5EAD6",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,

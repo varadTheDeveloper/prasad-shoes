@@ -26,13 +26,10 @@ export interface FormState {
   // COD only
   booking_date: string; // 'YYYY-MM-DD'
   weight: string;
-  sender_name: string;
-  sender_address: string;
-  sender_mobile: string;
 }
 export type FormKey = keyof FormState;
 
-export const COD_KEYS = ['booking_date', 'weight', 'sender_name', 'sender_address', 'sender_mobile'] as const;
+export const COD_KEYS = ['booking_date', 'weight'] as const;
 
 export const emptyForm = (type: PaymentType = DEFAULT_PAYMENT): FormState => ({
   ship_name: '',
@@ -50,15 +47,12 @@ export const emptyForm = (type: PaymentType = DEFAULT_PAYMENT): FormState => ({
   amount: '',
   booking_date: effectivePayment(type) === 'COD' ? todayISO() : '',
   weight: '',
-  sender_name: '',
-  sender_address: '',
-  sender_mobile: '',
 });
 
 /** Prepaid <-> COD on an existing form: Prepaid keeps no COD details; COD gets today's booking date. */
 export function withType(f: FormState, type: PaymentType): FormState {
   const t = effectivePayment(type);
-  if (t === 'PREPAID') return { ...f, payment_type: t, booking_date: '', weight: '', sender_name: '', sender_address: '', sender_mobile: '' };
+  if (t === 'PREPAID') return { ...f, payment_type: t, booking_date: '', weight: '' };
   return { ...f, payment_type: t, booking_date: f.booking_date || todayISO() };
 }
 
@@ -79,25 +73,14 @@ export function formFromOrder(o: Order): FormState {
     amount: o.amount === undefined || o.amount === null ? '' : String(o.amount),
     booking_date: o.booking_date ?? '',
     weight: o.weight ?? '',
-    sender_name: o.sender_name ?? '',
-    sender_address: o.sender_address ?? '',
-    sender_mobile: o.sender_mobile ?? '',
   };
 }
 
 /** COD details for saving / printing (null for Prepaid). */
-function codPart(f: FormState, mobile: (v: string) => string | null) {
+function codPart(f: FormState) {
   const n = (v: string) => (v.trim() ? v.trim() : null);
-  if (effectivePayment(f.payment_type) !== 'COD') {
-    return { booking_date: null, weight: null, sender_name: null, sender_address: null, sender_mobile: null };
-  }
-  return {
-    booking_date: n(f.booking_date),
-    weight: n(f.weight),
-    sender_name: n(f.sender_name),
-    sender_address: n(f.sender_address),
-    sender_mobile: mobile(f.sender_mobile),
-  };
+  if (effectivePayment(f.payment_type) !== 'COD') return { booking_date: null, weight: null };
+  return { booking_date: n(f.booking_date), weight: n(f.weight) };
 }
 
 export function toInput(f: FormState, showAmount: boolean): OrderInput {
@@ -115,7 +98,7 @@ export function toInput(f: FormState, showAmount: boolean): OrderInput {
     size: n(f.size),
     note: n(f.note),
     payment_type: effectivePayment(f.payment_type),
-    ...codPart(f, (v) => (v.trim() ? v.trim() : null)),
+    ...codPart(f),
   };
   if (showAmount) out.amount = f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null;
   return out;
@@ -138,7 +121,7 @@ export function formToLabel(f: FormState): LabelOrder {
     note: n(f.note),
     payment_type: effectivePayment(f.payment_type),
     amount: f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null,
-    ...codPart(f, (v) => (v.trim() ? normaliseMobile(v) || v.trim() : null)),
+    ...codPart(f),
   };
 }
 
@@ -159,13 +142,7 @@ export function validate(f: FormState, showAmount: boolean): Record<string, stri
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
   if (showAmount && amt && !(Number(amt) >= 0)) e.amount = 'Enter a number, e.g. 1299';
   if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = 'Enter COD amount';
-  if (f.payment_type === 'COD') {
-    if (f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = 'Pick a booking date';
-    if (f.sender_mobile.trim()) {
-      const sm = f.sender_mobile.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
-      if (!/^\d{10}$/.test(sm)) e.sender_mobile = 'Enter 10 digits';
-    }
-  }
+  if (f.payment_type === 'COD' && f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = 'Pick a booking date';
   return e;
 }
 
@@ -245,7 +222,8 @@ export function OrderForm({
         <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12, marginTop: 2 }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>COD details</Text>
           <Text style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
-            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID {COD_FIXED.contractId}
+            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID{' '}
+            {COD_FIXED.contractId} · {COD_FIXED.hub}. From is always the shop. Size + Note print as “COD 1999 (Size 8 …)”.
           </Text>
           <Row>
             {showAmount ? (
@@ -263,22 +241,6 @@ export function OrderForm({
             <View style={hl('booking_date') ? { borderRadius: 8, backgroundColor: C.tint } : undefined}>
               <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder="Pick date" />
             </View>
-          </Field>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginTop: 4, marginBottom: 6 }}>From (sender)</Text>
-          <Row>
-            <Field label="Sender name" error={errors.sender_name} style={half}>
-              {input('sender_name', { placeholder: 'Empty = shop details', autoCapitalize: 'words' })}
-            </Field>
-            <Field label="Sender mobile" error={errors.sender_mobile} style={half}>
-              {input('sender_mobile', { keyboardType: 'phone-pad', placeholder: 'Optional', maxLength: 14 })}
-            </Field>
-          </Row>
-          <Field label="Sender address" error={errors.sender_address}>
-            {input('sender_address', {
-              multiline: true,
-              placeholder: 'Leave empty to print the shop address',
-              style: { minHeight: 56, paddingTop: 12, textAlignVertical: 'top' },
-            })}
           </Field>
         </View>
       ) : showAmount ? (

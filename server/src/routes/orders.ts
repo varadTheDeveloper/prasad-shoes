@@ -65,12 +65,9 @@ const fields = {
       return v.trim();
     }),
   weight: opt(20),
-  sender_name: opt(120),
-  sender_address: opt(500),
-  sender_mobile: mobile(false),
 };
 
-const COD_ONLY = ['booking_date', 'weight', 'sender_name', 'sender_address', 'sender_mobile'] as const;
+const COD_ONLY = ['booking_date', 'weight'] as const;
 
 /** Prepaid orders keep no COD details, so the two never mix. */
 function dropCodIfPrepaid<T extends Record<string, any>>(o: T): T {
@@ -102,7 +99,7 @@ function parseCreate(body: any) {
 
 const ORDER_COLS = `o.id, o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2,
   o.product_name, o.size, o.note, o.payment_type, o.amount, to_char(o.booking_date, 'YYYY-MM-DD') AS booking_date, o.weight,
-  o.sender_name, o.sender_address, o.sender_mobile, o.is_printed, o.printed_at, o.dup_override,
+  o.is_printed, o.printed_at, o.dup_override,
   o.created_by, cu.name AS created_by_name, o.created_at, o.updated_at, o.deleted_at`;
 
 /** Remove amounts for users without ORDER_VIEW_AMOUNT. */
@@ -176,13 +173,13 @@ r.post(
       const ins = await c.query(
         `INSERT INTO orders (ship_name, address, landmark, district, state, pincode, mobile1, mobile2, product_name, size, note,
                              payment_type, amount, raw_message, msg_hash, client_request_id, dup_override, created_by,
-                             booking_date, weight, sender_name, sender_address, sender_mobile)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+                             booking_date, weight)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
          ON CONFLICT (client_request_id) DO NOTHING
          RETURNING id`,
         [o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note,
           o.payment_type, amount, o.raw_message, hash, o.client_request_id, Boolean(o.force && dup.rowCount), u.id,
-          o.booking_date, o.weight, o.sender_name, o.sender_address, o.sender_mobile],
+          o.booking_date, o.weight],
       );
       if (!ins.rowCount) {
         const ex = await c.query(`SELECT id FROM orders WHERE client_request_id = $1`, [o.client_request_id]);
@@ -339,11 +336,11 @@ r.put(
       await c.query(
         `UPDATE orders SET ship_name=$2, address=$3, landmark=$4, district=$5, state=$6, pincode=$7, mobile1=$8, mobile2=$9,
                 product_name=$10, size=$11, note=$12, payment_type=$13, amount=$14, updated_by=$15, updated_at=now(),
-                booking_date=$16, weight=$17, sender_name=$18, sender_address=$19, sender_mobile=$20
+                booking_date=$16, weight=$17
           WHERE id = $1`,
         [id, next.ship_name, next.address, next.landmark, next.district, next.state, next.pincode, next.mobile1, next.mobile2,
           next.product_name, next.size, next.note, next.payment_type, next.amount ?? null, u.id,
-          next.booking_date ?? null, next.weight ?? null, next.sender_name ?? null, next.sender_address ?? null, next.sender_mobile ?? null],
+          next.booking_date ?? null, next.weight ?? null],
       );
       await audit(c, u.id, 'ORDER_EDIT', 'orders', id, before, next);
     });

@@ -147,10 +147,12 @@ A new APK is needed only when screens change. Server changes (Step 3) reach the 
    - With a red / orange note, the first **Save** asks you to check; tap **Checked – Save order** to save.
 4. Same message pasted twice? The app shows **"Already saved by Rahul at 12:41 pm"**.
    - **COD orders:** tap **COD** at the top *before* pasting (tap **Prepaid** to go back). The app reads the
-     booking date, weight, COD amount and the sender ("From") from the message. Booking Under
-     (Pune City West Division), Customer ID (14634841966) and Contract ID (41282773) are printed on every COD
-     label automatically – nobody types them. No date in the message = today's date. No sender = the shop's address.
-     The amount is printed in figures and words. Switching Prepaid ↔ COD starts the form again from the same message.
+     COD amount and "Size 8 pona sanke awaj" from the message (also a weight / booking date if written).
+     Booking Under (Pune City West Division), Customer ID (1634841966), Contract ID (41282773) and
+     BNPL HUB Pune 411001 are printed on every COD label automatically – nobody types them. Date = today unless changed.
+     The label prints "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" and, under the address,
+     "COD 1999 (Size 8 pona sanke awaj)". From is always the shop. No barcode – the post office sticks it on.
+     Switching Prepaid ↔ COD starts the form again from the same message.
 5. Evening: **Home → Print today's labels** → **Download Word file** → print. (Older unprinted orders: Orders screen.)
 
 The pincode list is `server/data/pincodes.json` (India Post directory from data.gov.in, 19,307 pincodes).

@@ -37,10 +37,8 @@ import {
   WidthType,
 } from 'docx';
 import {
-  codAmountLines,
-  codFromLines,
   codHeadLines,
-  codItemLine,
+  codOrderLine,
   fromLines,
   orderLine,
   toLines,
@@ -111,28 +109,24 @@ function fromBlock(shop: LabelShop): Paragraph[] {
 }
 
 // ---- COD label (India Post) ---------------------------------------------------------------------
-// Same half-page, same cut line; only the text inside differs. Top to bottom (right-aligned):
-// Booking Under / Customer ID / Contract ID / Booking Date + Weight, the COD amount (figures and
-// words), then "TO, <name>" and the address; "From :-" (left) with the sender – or the shop.
-// The COD label has more lines, so its font is picked to fit the half page (14 pt down to 9 pt).
-const COD_AMOUNT_GAP = 100;
-const COD_TO_GAP = 160;
+// Same half-page and cut line as Prepaid; the shop's printed COD layout inside:
+//   4 header lines, centred (Customer ID line and the COD FOR RUPEES line bold) ->
+//   "TO, <name>" + address, right-aligned (as Prepaid) -> "COD 1999 (Size 8 …)" (bold, as the Prepaid line) ->
+//   "From :-" + the shop, left-aligned (as Prepaid).
+// The COD label has 4 more lines, so its font is picked to fit the half page (14 pt down to 9 pt).
+const COD_TO_GAP = 200;
+const COD_LINE_GAP = 160; // as the Prepaid "PREPAID (…)" line
 // Height the text may use in each half (the smaller of the two halves, minus a safety band).
 const COD_ROOM = Math.min(TOP_HALF - 120, BOTTOM_HALF - CUT_GAP) - 300;
 
-function codAllLines(o: LabelOrder, shop: LabelShop): string[] {
-  const item = codItemLine(o);
-  return [...codHeadLines(o), ...codAmountLines(o), ...(item ? [item] : []), `TO, ${o.ship_name}`, ...toLines(o), 'From :-', ...codFromLines(o, shop)];
-}
-
 /** Biggest font (half-points) at which every COD line fits in its half of the page. */
 export function codSize(o: LabelOrder, shop: LabelShop): number {
-  const lines = codAllLines(o, shop);
+  const lines = [...codHeadLines(o), `TO, ${o.ship_name}`, ...toLines(o), codOrderLine(o), 'From :-', ...fromLines(shop)];
   for (const size of [28, 26, 24, 22, 20, 18]) {
     const perLine = Math.floor((55 * 28) / size); // ~55 characters per line at 14 pt
     const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
     // Nirmala UI line = font size x 1.33, x 1.1 for the paragraph line spacing (264/240); 20 twips per point
-    const height = rows * (size / 2) * 20 * 1.33 * 1.1 + COD_AMOUNT_GAP + COD_TO_GAP + FROM_GAP;
+    const height = rows * (size / 2) * 20 * 1.33 * 1.1 + COD_TO_GAP + COD_LINE_GAP + FROM_GAP;
     if (height <= COD_ROOM) return size;
   }
   return 18;
@@ -140,19 +134,14 @@ export function codSize(o: LabelOrder, shop: LabelShop): number {
 
 function codBlock(o: LabelOrder, shop: LabelShop, spaceBefore: number): Paragraph[] {
   const size = codSize(o, shop);
-  const item = codItemLine(o);
-  const right = (text: string, opts: { bold?: boolean } = {}, before = 0) =>
-    para(AlignmentType.RIGHT, [run(text, size, opts)], before ? { spacing: { before, after: 0, line: 264 } } : {});
+  const at = (before: number) => (before ? { spacing: { before, after: 0, line: 264 } } : {});
   return [
-    ...codHeadLines(o).map((l, i) => right(l, { bold: i === 3 }, i === 0 ? spaceBefore : 0)),
-    ...codAmountLines(o).map((l, i) => right(l, { bold: i === 0 }, i === 0 ? COD_AMOUNT_GAP : 0)),
-    ...(item ? [right(item)] : []),
-    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], {
-      spacing: { before: COD_TO_GAP, after: 0, line: 264 },
-    }),
-    ...toLines(o).map((l) => right(l)),
-    para(AlignmentType.LEFT, [run('From :-', size, { bold: true, underline: true })], { spacing: { before: FROM_GAP, after: 0, line: 264 } }),
-    ...codFromLines(o, shop).map((l) => para(AlignmentType.LEFT, [run(l, size)])),
+    ...codHeadLines(o).map((l, i) => para(AlignmentType.CENTER, [run(l, size, { bold: i === 1 || i === 3 })], at(i === 0 ? spaceBefore : 0))),
+    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], at(COD_TO_GAP)),
+    ...toLines(o).map((l) => para(AlignmentType.RIGHT, [run(l, size)])),
+    para(AlignmentType.RIGHT, [run(codOrderLine(o), size, { bold: true })], at(COD_LINE_GAP)),
+    para(AlignmentType.LEFT, [run('From :-', size, { bold: true, underline: true })], at(FROM_GAP)),
+    ...fromLines(shop).map((l) => para(AlignmentType.LEFT, [run(l, size)])),
   ];
 }
 

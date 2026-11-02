@@ -1,30 +1,13 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import {
-  codAmountLines,
-  codFromLines,
-  codHeadLines,
-  codItemLine,
-  fromLines,
-  orderLine,
-  toLines,
-  type LabelOrder,
-  type LabelShop,
-} from '@shared/label';
+import { codHeadLines, codOrderLine, fromLines, orderLine, toLines, type LabelOrder, type LabelShop } from '@shared/label';
 import type { ShopSettings } from '@shared/types';
 import { api } from '@/lib/api';
 import { C } from '@/lib/theme';
 
-/** Every line of a COD label, top to bottom, as the Word file prints it. */
+/** Every line of a COD label, top to bottom, as the Word file prints it (From = the shop). */
 function codRows(o: LabelOrder, shop: LabelShop | null) {
-  const item = codItemLine(o);
-  return {
-    head: codHeadLines(o),
-    amount: codAmountLines(o),
-    item,
-    to: toLines(o),
-    from: shop ? codFromLines(o, shop) : o.sender_name || o.sender_address ? codFromLines(o, { shop_name: '', address1: '', city_pin: '', phones: '' }) : [],
-  };
+  return { head: codHeadLines(o), to: toLines(o), line: codOrderLine(o), from: shop ? fromLines(shop) : [] };
 }
 
 /**
@@ -72,29 +55,26 @@ export function PagePreview({ labels, shop, scale = 1 }: { labels: (LabelOrder |
 /** One COD half on the small A4 picture. */
 function CodPage({ o, shop, f }: { o: LabelOrder; shop: LabelShop; f: (n: number) => number }) {
   const r = codRows(o, shop);
-  const line = (l: string, j: number, extra: object = {}) => (
-    <Text key={j} style={[st.t, st.r, { fontSize: f(5) }, extra]} numberOfLines={1}>
+  const t = (l: string, j: number, extra: object[] = []) => (
+    <Text key={j} style={[st.t, { fontSize: f(5) }, ...extra]} numberOfLines={1}>
       {l}
     </Text>
   );
   return (
     <>
       <View>
-        {r.head.map((l, j) => line(l, j, j === 3 ? st.b : {}))}
-        <View style={{ marginTop: f(2) }}>{r.amount.map((l, j) => line(l, j, j === 0 ? st.b : {}))}</View>
-        {r.item ? line(r.item, 0) : null}
-        <Text style={[st.t, st.b, st.r, { fontSize: f(5.5), marginTop: f(2) }]} numberOfLines={1}>
+        {r.head.map((l, j) => t(l, j, [st.c, j === 1 || j === 3 ? st.b : {}]))}
+        <Text style={[st.t, st.b, st.r, { fontSize: f(5.5), marginTop: f(3) }]} numberOfLines={1}>
           TO, {o.ship_name}
         </Text>
-        {r.to.map((l, j) => line(l, j))}
+        {r.to.map((l, j) => t(l, j, [st.r]))}
+        <Text style={[st.t, st.b, st.r, { fontSize: f(5.5), marginTop: f(2) }]} numberOfLines={2}>
+          {r.line}
+        </Text>
       </View>
-      <View style={{ marginTop: f(3) }}>
+      <View style={{ marginTop: f(4) }}>
         <Text style={[st.t, st.b, { fontSize: f(5), textDecorationLine: 'underline' }]}>From :-</Text>
-        {r.from.map((l, j) => (
-          <Text key={j} style={[st.t, { fontSize: f(5) }]} numberOfLines={1}>
-            {l}
-          </Text>
-        ))}
+        {r.from.map((l, j) => t(l, j))}
       </View>
     </>
   );
@@ -107,7 +87,7 @@ function CodPage({ o, shop, f }: { o: LabelOrder; shop: LabelShop; f: (n: number
 export function ToPreview({ order }: { order: LabelOrder }) {
   const empty = !order.ship_name && !order.address;
   const cod = order.payment_type === 'COD';
-  // The shop's address is the COD "From" when no sender was given (same query the print screen uses).
+  // "From" on a COD label is always the shop (same query the print screen uses).
   const shop = useQuery({ queryKey: ['shop'], queryFn: () => api<ShopSettings>('GET', '/shop'), enabled: cod, staleTime: 5 * 60_000 });
   if (cod) {
     const r = codRows(order, shop.data ?? null);
@@ -115,16 +95,10 @@ export function ToPreview({ order }: { order: LabelOrder }) {
       <View style={st.paper}>
         <Text style={st.paperTag}>WILL PRINT · COD</Text>
         {r.head.map((l, j) => (
-          <Text key={`h${j}`} style={[st.t, st.r, st.small, j === 3 && st.b]}>
+          <Text key={`h${j}`} style={[st.t, st.c, st.small, (j === 1 || j === 3) && st.b]}>
             {l}
           </Text>
         ))}
-        {r.amount.map((l, j) => (
-          <Text key={`a${j}`} style={[st.t, st.r, st.line, j === 0 ? [st.b, { marginTop: 6 }] : st.small]}>
-            {l}
-          </Text>
-        ))}
-        {r.item ? <Text style={[st.t, st.r, st.small]}>{r.item}</Text> : null}
         {empty ? (
           <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 12 }]}>The address appears here after you paste</Text>
         ) : (
@@ -135,6 +109,7 @@ export function ToPreview({ order }: { order: LabelOrder }) {
                 {l}
               </Text>
             ))}
+            <Text style={[st.t, st.b, st.r, st.line, { marginTop: 6 }]}>{r.line}</Text>
           </>
         )}
         <Text style={[st.t, st.b, st.small, { marginTop: 8, textDecorationLine: 'underline' }]}>From :-</Text>
@@ -186,6 +161,7 @@ const st = StyleSheet.create({
   t: { color: '#000' },
   b: { fontWeight: '700' },
   r: { textAlign: 'right' },
+  c: { textAlign: 'center' },
   paper: {
     backgroundColor: '#fff',
     borderWidth: 1,

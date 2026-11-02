@@ -1,26 +1,26 @@
 // COD: reading booking messages, amount in words, the COD label text. Run: cd server && npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { codRemainder, findBookingDate, findUnused, findWeight, parseCodMessage, parseWhatsApp } from '../parser';
+import { codRemainder, findBookingDate, findUnused, findWeight, parseCodMessage, parseWhatsApp, splitSize } from '../parser';
 import { COD_FIXED, amountInWords, isIsoDate, numberInWords, printDate } from '../cod';
-import { codAmountLines, codFromLines, codHeadLines, codItemLine, fromLines, orderLine, toLines, type LabelOrder } from '../label';
-
-const shop = { shop_name: 'PRASAD SHOES', address1: '1306, Shukrawar Peth', address2: null, city_pin: 'Pune 411002', phones: '9822000000' };
+import { codAmountLine, codHeadLines, codOrderLine, orderLine, toLines, type LabelOrder } from '../label';
 
 // ------------------------------------------------------------------ amount in words
-test('amount in words (Indian system)', () => {
+test('amount in words (Indian system, as printed on the COD label)', () => {
   assert.equal(numberInWords(1299), 'One Thousand Two Hundred Ninety Nine');
   assert.equal(numberInWords(100000), 'One Lakh');
   assert.equal(numberInWords(125050), 'One Lakh Twenty Five Thousand Fifty');
   assert.equal(numberInWords(10_00_00_000), 'Ten Crore');
-  assert.equal(amountInWords(1299), 'Rupees One Thousand Two Hundred Ninety Nine Only');
-  assert.equal(amountInWords(850.5), 'Rupees Eight Hundred Fifty and Fifty Paise Only');
+  assert.equal(amountInWords(1999), 'ONE THOUSAND NINE HUNDRED NINETY NINE ONLY');
+  assert.equal(amountInWords(850), 'EIGHT HUNDRED FIFTY ONLY');
+  assert.equal(amountInWords(2500), 'TWO THOUSAND FIVE HUNDRED ONLY');
+  assert.equal(amountInWords(1999.5), 'ONE THOUSAND NINE HUNDRED NINETY NINE AND FIFTY PAISE ONLY');
   assert.equal(amountInWords(null), '');
   assert.equal(amountInWords(0), '');
 });
 
 test('dates', () => {
-  assert.equal(printDate('2026-11-03'), '03-11-2026');
+  assert.equal(printDate('2026-11-03'), '03/11/2026');
   assert.equal(printDate(null), '');
   assert.ok(isIsoDate('2026-02-28'));
   assert.ok(!isIsoDate('2026-02-30'));
@@ -41,78 +41,98 @@ test('weights', () => {
   assert.equal(findWeight('Swt road'), null);
 });
 
-// ------------------------------------------------------------------ COD messages
-const MSG1 = `Booking Under: Pune City West Division
-Customer ID: 14634841966
-Contract ID: 41282773
-Booking Date: 02/11/2026    Weight: 800 gm
-COD Amount: Rs. 1299/- (One Thousand Two Hundred Ninety Nine Only)
-
-To,
-Ramesh Patil
-At post Wadgaon, Tal Karad
-Dist Satara
-Pin 415110
-Mob 9876543210
-
-From,
-Prasad Shoes
-1306 Shukrawar Peth, Pune 411002
-Mob 9822000000`;
-
-test('full COD message: every detail found, fixed lines ignored', () => {
-  const p = parseCodMessage(MSG1);
-  assert.equal(p.booking_date, '2026-11-02');
-  assert.equal(p.weight, '800 g');
-  assert.equal(p.amount, 1299);
-  assert.equal(p.ship_name, 'Ramesh Patil');
-  assert.match(p.address, /At post Wadgaon, Tal Karad/);
-  assert.equal(p.district, 'Satara');
-  assert.equal(p.pincode, '415110');
-  assert.equal(p.mobile1, '9876543210');
-  assert.equal(p.sender_name, 'Prasad Shoes');
-  assert.equal(p.sender_mobile, '9822000000');
-  assert.match(p.sender_address, /1306 Shukrawar Peth, Pune/);
-  assert.match(p.sender_address, /411002/);
-  // the fixed details never end up in a field
-  const all = JSON.stringify(p);
-  for (const v of [COD_FIXED.customerId, COD_FIXED.contractId, 'West Division']) assert.ok(!all.includes(v), `${v} leaked into a field`);
-  assert.deepEqual(p.missing, []);
-  // the sender's phone / pincode are not the receiver's
-  assert.notEqual(p.mobile2, '9822000000');
-  // nothing in the message is left unused
-  assert.deepEqual(findUnused(codRemainder(MSG1), p as any), []);
+test('size + description', () => {
+  assert.deepEqual(splitSize('8 pona sanke awaj'), { size: '8', note: 'pona sanke awaj' });
+  assert.deepEqual(splitSize('9 no, black kolhapuri'), { size: '9', note: 'black kolhapuri' });
+  assert.deepEqual(splitSize('10'), { size: '10', note: '' });
+  assert.deepEqual(splitSize('7.5'), { size: '7.5', note: '' });
+  assert.deepEqual(splitSize('UK 8'), { size: 'UK 8', note: '' });
 });
 
-test('sender first, labelled receiver after, Marathi labels, amount as "COD 1599"', () => {
-  const p = parseCodMessage(`From: Prasad Shoes Pune 9822000000
+// ------------------------------------------------------------------ COD messages
+// The customer's WhatsApp template (as on the shop's real COD label of 2 Nov 2026)
+const WA = `Naam - vijay shivaji ingale
+Address =37mld plant afgan charch nanabhai moos marg nevy nagar colaba Mumbai - 400005
+Landmark ( NEARBY SCHOOL, ROAD , CHOWK )
+State Maharashtra
+Pincode -400005
+Mobile No 1.7888252371
+Mobile no 2.8421605771
+Size 8 pona sanke awaj
+COD 1999`;
 
-नाव - सुनील जाधव
+test('WhatsApp order: customer, COD amount, size + description', () => {
+  const p = parseCodMessage(WA);
+  assert.equal(p.ship_name, 'vijay shivaji ingale');
+  assert.match(p.address, /^37mld plant afgan charch nanabhai moos marg nevy nagar colaba Mumbai/);
+  assert.equal(p.pincode, '400005');
+  assert.equal(p.state, 'Maharashtra');
+  assert.equal(p.mobile1, '7888252371');
+  assert.equal(p.mobile2, '8421605771');
+  assert.equal(p.amount, 1999);
+  assert.equal(p.size, '8');
+  assert.equal(p.note, 'pona sanke awaj');
+  assert.deepEqual(p.missing, []);
+  assert.deepEqual(findUnused(codRemainder(WA), p as any), []);
+});
+
+test('bare amount line ("1999") is the COD amount too', () => {
+  const p = parseCodMessage(WA.replace('COD 1999', '1999'));
+  assert.equal(p.amount, 1999);
+});
+
+test('the text of an old printed COD label (header, From block) is read correctly', () => {
+  const label = `Booking Under Pune City West Division
+Customer ID : 1634841966, Contract ID – 41282773
+BNPL HUB Pune 411001, Weight :      Date :  02/11/2026
+COD FOR RUPEES : 1999/-( ONE THOUSAND nine Hundred ninety NINE only)
+
+TO, vijay shivaji ingale
+Address =37mld plant afgan charch nanabhai moos marg nevy nagar colaba Mumbai - 400005
+Landmark ( NEARBY SCHOOL, ROAD , CHOWK )
+State Maharashtra
+Pincode -400005
+Mobile No 1.7888252371
+Mobile no 2.8421605771
+
+COD 1999 (Size 8 pona sanke awaj)
+
+From :-
+PRASAD SHOES
+1306, shukrawar Peth
+Nr. BSNL office, Pune 411002.
+Mob. 7020861805, 9270063067.`;
+  const p = parseCodMessage(label);
+  assert.equal(p.ship_name, 'vijay shivaji ingale');
+  assert.equal(p.amount, 1999);
+  assert.equal(p.booking_date, '2026-11-02');
+  assert.equal(p.size, '8');
+  assert.equal(p.note, 'pona sanke awaj');
+  assert.equal(p.mobile1, '7888252371');
+  assert.equal(p.mobile2, '8421605771');
+  // the shop's own From block and the fixed IDs never reach the receiver
+  const all = JSON.stringify(p);
+  for (const v of [COD_FIXED.customerId, COD_FIXED.contractId, '7020861805', 'BSNL', 'BNPL', 'PRASAD']) assert.ok(!all.includes(v), `${v} leaked`);
+  assert.deepEqual(findUnused(codRemainder(label), p as any), []);
+});
+
+test('Marathi labels, weight + date in the message', () => {
+  const p = parseCodMessage(`नाव - सुनील जाधव
 पत्ता - मु. पो. कोंडी, ता. उत्तर सोलापूर
 पिन कोड 413255
 मोबाईल 7276052601
+साइज 9
 COD 1599
-वजन 1 kg`);
+वजन 1 kg
+Booking date 03/11/2026`);
   assert.equal(p.ship_name, 'सुनील जाधव');
   assert.equal(p.pincode, '413255');
   assert.equal(p.mobile1, '7276052601');
   assert.equal(p.amount, 1599);
   assert.equal(p.weight, '1 kg');
-  assert.equal(p.sender_mobile, '9822000000');
-  assert.equal(p.booking_date, '', 'no date in the message');
-});
-
-test('message with no From / date / weight: receiver only, COD amount from "Amount"', () => {
-  const p = parseCodMessage(`Naam - Devidas Shinde
-Address - Vill Tekumatla, Jaipur mandal
-Pincode 504216
-Mobile no 1 - 8106093098
-Amount 2499`);
-  assert.equal(p.ship_name, 'Devidas Shinde');
-  assert.equal(p.amount, 2499);
-  assert.equal(p.sender_name, '');
-  assert.equal(p.sender_address, '');
-  assert.equal(p.weight, '');
+  assert.equal(p.booking_date, '2026-11-03');
+  assert.equal(p.size, '9');
+  assert.equal(p.note, '');
 });
 
 test('missing amount is reported (COD needs one)', () => {
@@ -122,58 +142,53 @@ test('missing amount is reported (COD needs one)', () => {
 });
 
 test('Prepaid reading is unchanged by the COD reader', () => {
-  const msg = 'Naam - Devidas\nAddress - Karad\nPincode 415110\nMobile 9876543210';
-  const a = parseWhatsApp(msg);
-  const b = parseWhatsApp(msg);
-  assert.deepEqual(a, b);
-  assert.equal(a.ship_name, 'Devidas');
+  const a = parseWhatsApp(WA);
+  assert.equal(a.size, '8 pona sanke awaj', 'Prepaid keeps the size as written');
+  assert.equal(a.ship_name, 'vijay shivaji ingale');
 });
 
 // ------------------------------------------------------------------ COD label text
 const cod: LabelOrder = {
-  ship_name: 'Ramesh Patil',
-  address: 'At post Wadgaon, Tal Karad',
-  district: 'Satara',
+  ship_name: 'vijay shivaji ingale',
+  address: '37mld plant afgan charch nanabhai moos marg nevy nagar colaba Mumbai - 400005',
   state: 'Maharashtra',
-  pincode: '415110',
-  mobile1: '9876543210',
-  product_name: 'Kolhapuri',
-  size: '9',
+  pincode: '400005',
+  mobile1: '7888252371',
+  mobile2: '8421605771',
+  size: '8',
+  note: 'pona sanke awaj',
   payment_type: 'COD',
-  amount: 1299,
+  amount: 1999,
   booking_date: '2026-11-02',
-  weight: '800 g',
+  weight: null,
 };
 
-test('COD label: fixed details always, in the right order', () => {
+test('COD header: fixed details, BNPL HUB + weight + date, amount in figures and words', () => {
   assert.deepEqual(codHeadLines(cod), [
-    'Booking Under: Pune City West Division',
-    'Customer ID: 14634841966',
-    'Contract ID: 41282773',
-    'Booking Date: 02-11-2026   Weight: 800 g',
+    'Booking Under Pune City West Division',
+    'Customer ID : 1634841966, Contract ID – 41282773',
+    'BNPL HUB Pune 411001, Weight : ________    Date : 02/11/2026',
+    'COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY',
   ]);
-  assert.deepEqual(codAmountLines(cod), ['COD Amount: Rs. 1299/-', '(Rupees One Thousand Two Hundred Ninety Nine Only)']);
-  assert.equal(codItemLine(cod), '(Kolhapuri, 9 no)');
-  // fixed details print even when nothing else COD was given
-  const bare = { ...cod, booking_date: null, weight: null, amount: null };
-  const head = codHeadLines(bare);
-  assert.equal(head[0], 'Booking Under: Pune City West Division');
-  assert.equal(head[1], 'Customer ID: 14634841966');
-  assert.equal(head[2], 'Contract ID: 41282773');
-  assert.match(head[3], /^Booking Date: _+ {3}Weight: _+$/);
+  assert.equal(codHeadLines({ ...cod, weight: '800 g' })[2], 'BNPL HUB Pune 411001, Weight : 800 g    Date : 02/11/2026');
+  assert.equal(codAmountLine({ ...cod, amount: 2450 }), 'COD FOR RUPEES : 2450/-TWO THOUSAND FOUR HUNDRED FIFTY ONLY');
 });
 
-test('COD From: sender from the message, else the shop', () => {
-  assert.deepEqual(codFromLines(cod, shop), fromLines(shop));
-  assert.deepEqual(codFromLines({ ...cod, sender_name: 'Amit Traders', sender_address: 'Kothrud, Pune - 411038', sender_mobile: '9000000001' }, shop), [
-    'Amit Traders',
-    'Kothrud, Pune - 411038',
-    'Mob. 9000000001',
+test('COD line after the address uses the real amount, size and description', () => {
+  assert.equal(codOrderLine(cod), 'COD 1999 (Size 8 pona sanke awaj)');
+  assert.equal(codOrderLine({ ...cod, amount: 1299, size: '10', note: null }), 'COD 1299 (Size 10)');
+  assert.equal(codOrderLine({ ...cod, product_name: 'Kolhapuri', size: '9', note: 'RED' }), 'COD 1999 (Kolhapuri, Size 9 RED)');
+  assert.equal(codOrderLine({ ...cod, size: null, note: null }), 'COD 1999');
+  // the receiver block is the same as on a Prepaid label
+  assert.deepEqual(toLines(cod), [
+    '37mld plant afgan charch nanabhai moos marg nevy nagar colaba Mumbai',
+    'Maharashtra',
+    'Mob. 7888252371, 8421605771',
+    'Pin code 400005',
   ]);
 });
 
 test('Prepaid label text is unchanged', () => {
-  const pre: LabelOrder = { ...cod, payment_type: 'PREPAID', booking_date: null, weight: null };
-  assert.equal(orderLine(pre), 'PREPAID (Kolhapuri, 9 no)');
-  assert.deepEqual(toLines(pre), ['At post Wadgaon, Tal Karad', 'Satara', 'Maharashtra', 'Mob. 9876543210', 'Pin code 415110']);
+  const pre: LabelOrder = { ...cod, payment_type: 'PREPAID', product_name: 'Kolhapuri', size: '9', note: 'RED', booking_date: null };
+  assert.equal(orderLine(pre), 'PREPAID (Kolhapuri, 9 no, RED)');
 });

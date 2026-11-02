@@ -4,8 +4,8 @@
 export const FEATURES = {
   /**
    * Cash on Delivery. ON since 3 Nov 2026: staff pick Prepaid or COD before pasting.
-   * COD orders print the COD label (fixed India Post booking details from shared/cod.ts,
-   * booking date, weight, COD amount in figures and words, receiver, sender).
+   * COD orders print the COD label (fixed India Post details from shared/cod.ts, weight + date,
+   * COD amount in figures and words, receiver, "COD 1999 (Size 8 …)", From = the shop).
    * Set to false to hide COD again: every new order is then saved as PREPAID.
    */
   cod: true,

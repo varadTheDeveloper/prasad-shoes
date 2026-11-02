@@ -20,9 +20,6 @@ export interface LabelOrder {
   // COD only
   booking_date?: string | null;
   weight?: string | null;
-  sender_name?: string | null;
-  sender_address?: string | null;
-  sender_mobile?: string | null;
 }
 
 export interface LabelShop {
@@ -83,46 +80,44 @@ export function fromLines(s: LabelShop): string[] {
 }
 
 // ------------------------------------------------------------------------------------------------
-// COD label (India Post). Printed in this order:
-//   Booking Under / Customer ID / Contract ID (fixed, shared/cod.ts) -> Booking Date + Weight ->
-//   COD amount (figures + words) -> TO, receiver name + address -> From (sender, or the shop).
-// The Prepaid label above is not changed by any of this.
+// COD label (India Post) – same layout as the shop's printed COD labels:
+//
+//               Booking Under Pune City West Division                       (centred)
+//          Customer ID : 1634841966, Contract ID – 41282773                (centred, bold)
+//      BNPL HUB Pune 411001, Weight : 800 g    Date : 03/11/2026           (centred)
+//   COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY      (centred, bold)
+//                                                   TO, <name>             (right, as Prepaid)
+//                                                   address … (toLines)
+//                                                   COD 1999 (Size 8 pona sanke awaj)
+//   From :-  <shop>                                                         (left, as Prepaid)
+//
+// The fixed values come from shared/cod.ts. The Prepaid label above is not changed by any of this.
 // ------------------------------------------------------------------------------------------------
-const BLANK = '__________';
+const BLANK = '________';
 
-/** The fixed India Post lines + booking date / weight. A missing date / weight prints a blank to write in. */
+/** The centred header: 4 lines. Index 1 and 3 are printed bold. A missing weight / date prints a blank. */
 export function codHeadLines(o: LabelOrder): string[] {
   return [
-    `Booking Under: ${COD_FIXED.bookingUnder}`,
-    `Customer ID: ${COD_FIXED.customerId}`,
-    `Contract ID: ${COD_FIXED.contractId}`,
-    `Booking Date: ${printDate(o.booking_date) || BLANK}   Weight: ${o.weight?.trim() || BLANK}`,
+    `Booking Under ${COD_FIXED.bookingUnder}`,
+    `Customer ID : ${COD_FIXED.customerId}, Contract ID – ${COD_FIXED.contractId}`,
+    `${COD_FIXED.hub}, Weight : ${o.weight?.trim() || BLANK}    Date : ${printDate(o.booking_date) || BLANK}`,
+    codAmountLine(o),
   ];
 }
 
-/** "COD Amount: Rs. 1299/-" and "(Rupees One Thousand Two Hundred Ninety Nine Only)". */
-export function codAmountLines(o: LabelOrder): string[] {
+/** "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" (amount from the order). */
+export function codAmountLine(o: LabelOrder): string {
   const amt = formatAmount(o.amount);
-  const words = amountInWords(o.amount ?? null);
-  return [`COD Amount: Rs. ${amt || BLANK}/-`, ...(words ? [`(${words})`] : [])];
+  return `COD FOR RUPEES : ${amt || BLANK}/-${amountInWords(o.amount ?? null)}`;
 }
 
-/** Product / size / note under the amount: "(Kolhapuri Kurundwad, 10 no, RED)" – '' when all are empty. */
-export function codItemLine(o: LabelOrder): string {
-  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', o.note?.trim()].filter(Boolean);
-  return parts.length ? `(${parts.join(', ')})` : '';
-}
-
-/** "From" block of a COD label: the sender from the message, or the shop when none was given. */
-export function codFromLines(o: LabelOrder, shop: LabelShop): string[] {
-  const name = o.sender_name?.trim();
-  const address = (o.sender_address ?? '')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (!name && !address.length) return fromLines(shop);
-  const mob = o.sender_mobile?.trim();
-  return [...(name ? [name] : []), ...address, ...(mob ? [`Mob. ${mob}`] : [])];
+/** The line under the address: "COD 1999 (Size 8 pona sanke awaj)" – size and description from the order. */
+export function codOrderLine(o: LabelOrder): string {
+  const size = o.size?.trim();
+  const sizeText = [size ? `Size ${size}` : '', o.note?.trim()].filter(Boolean).join(' ');
+  const parts = [o.product_name?.trim(), sizeText].filter(Boolean);
+  const head = `COD ${formatAmount(o.amount)}`.trim();
+  return parts.length ? `${head} (${parts.join(', ')})` : head;
 }
 
 /** Two orders per A4 page (top half + bottom half). */

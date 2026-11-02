@@ -5,8 +5,8 @@ Save → owner downloads one Word file with **2 labels per A4 page**. Full human
 Owner (Varad) wants things explained in simple language, and the plan explained **before** making changes.
 
 ## Layout
-- `shared/` – used by app and server: `parser.ts` (WhatsApp text → fields, `findUnused`; COD: `parseCodMessage`, `codRemainder`),
-  `label.ts` (label text; COD: `codHeadLines`, `codAmountLines`, `codFromLines`), `cod.ts` (fixed COD details, amount in words),
+- `shared/` – used by app and server: `parser.ts` (WhatsApp text → fields, `findUnused`; COD: `parseCodMessage`, `codRemainder`, `splitSize`),
+  `label.ts` (label text; COD: `codHeadLines`, `codAmountLine`, `codOrderLine`), `cod.ts` (fixed COD details, amount in words),
   `features.ts` (`cod: true`), `permissions.ts`, `types.ts`. Tests in `shared/__tests__/`.
 - `server/` – Node 24 + Express + PostgreSQL 16 (plain SQL, `pg`). Routes in `src/routes/`, Word file in
   `src/services/docx.ts`, India Post pincode check in `src/services/pincode.ts` + `data/pincodes.json`.
@@ -66,9 +66,12 @@ Server-only changes do not need a new APK.
   (no table cell margins – WPS adds them to row heights).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
-- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). Prepaid: amount optional, label unchanged.
-  COD: amount required; booking date, weight, sender stored in their own columns (migration 005), cleared when an order is
-  Prepaid. Booking Under / Customer ID / Contract ID are constants in `shared/cod.ts` – never stored, never parsed, always printed.
-  COD label order: fixed details → booking date + weight → COD amount (figures + words) → TO receiver → From (sender, else shop).
-  COD font shrinks (14→9 pt, `codSize` in docx.ts) so a label always fits its half page.
+- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label.**
+  COD: amount required; booking date + weight in their own columns (migration 005), cleared when an order is Prepaid.
+  Booking Under / Customer ID 1634841966 / Contract ID 41282773 / BNPL HUB Pune 411001 are constants in `shared/cod.ts` –
+  never stored, never parsed, always printed. COD label = the shop's printed COD label: 4 centred header lines
+  ("Booking Under …", bold "Customer ID : …, Contract ID – …", "BNPL HUB Pune 411001, Weight : …    Date : DD/MM/YYYY",
+  bold "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY") → TO block right (as Prepaid) →
+  bold "COD 1999 (Size 8 pona sanke awaj)" (size + note; COD reader splits "Size 8 pona sanke awaj") → From = shop, left.
+  No barcode (the post office sticks it on). COD font shrinks (14→9 pt, `codSize` in docx.ts) to fit the half page.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.

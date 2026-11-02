@@ -4,7 +4,7 @@
 //   - India Post pincode check (red note when the pincode does not exist)
 //   - "Not used" lines: text from the message that ended up in no field
 // Prepaid / COD is picked first (buttons above the paste box). COD messages are read with the COD
-// reader (booking date, weight, COD amount, sender); switching type starts the form again from the
+// reader (COD amount, size + description, booking date, weight); switching type starts the form again from the
 // same message, so Prepaid and COD details never mix.
 // Warnings never block: the first Save tap shows them, the second tap ("Checked – Save") saves.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -117,6 +117,8 @@ export function usePasteOrder() {
           if (k === 'booking_date' && !p[k]) return;
           if (!touchedNow.has(k) || !f[k]) next[k] = p[k];
         });
+        // "Size 8 pona sanke awaj": the words after the size go to Note -> "COD 1999 (Size 8 pona sanke awaj)"
+        if (p.note && (!touchedNow.has('note') || !f.note)) next.note = p.note;
       }
       return next;
     });

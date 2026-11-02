@@ -4,8 +4,9 @@
 
 export const COD_FIXED = {
   bookingUnder: 'Pune City West Division',
-  customerId: '14634841966',
+  customerId: '1634841966',
   contractId: '41282773',
+  hub: 'BNPL HUB Pune 411001',
 } as const;
 
 const ONES = [
@@ -41,19 +42,20 @@ export function numberInWords(n: number): string {
   return parts.join(' ');
 }
 
-/** 1299 -> "Rupees One Thousand Two Hundred Ninety Nine Only"; 1299.5 -> "... and Fifty Paise Only". */
+/** As printed on the COD label: 1999 -> "ONE THOUSAND NINE HUNDRED NINETY NINE ONLY";
+ *  1999.5 -> "ONE THOUSAND NINE HUNDRED NINETY NINE AND FIFTY PAISE ONLY". '' when there is no amount. */
 export function amountInWords(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || !Number.isFinite(amount) || amount <= 0) return '';
   const rupees = Math.floor(amount + 1e-9);
   const paise = Math.round((amount - rupees) * 100);
-  const r = `Rupees ${numberInWords(rupees)}`;
-  return paise ? `${r} and ${upTo99(paise)} Paise Only` : `${r} Only`;
+  const words = paise ? `${numberInWords(rupees)} and ${upTo99(paise)} Paise Only` : `${numberInWords(rupees)} Only`;
+  return words.toUpperCase();
 }
 
-/** '2026-11-03' -> '03-11-2026' (how dates are written on India Post forms). '' for no date. */
+/** '2026-11-03' -> '03/11/2026' (as written on the shop's COD labels). '' for no date. */
 export function printDate(iso: string | null | undefined): string {
   const m = (iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
 /** Is 'YYYY-MM-DD' a real calendar date? */

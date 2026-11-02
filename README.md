@@ -3,7 +3,7 @@
 Staff paste a customer's WhatsApp address message → the app fills the order → Save.
 Everyone sees **one combined order list** (owner + all staff). Tick orders → download **one editable Word file, 2 orders per A4 page** (same layout as the shop's "Post Office COD" file).
 
-**Prepaid and COD** (since 3 Nov 2026): staff tap Prepaid or COD before pasting. Prepaid works exactly as before (amount optional). COD orders need an amount and print the India Post COD label: the fixed Booking Under / Customer ID / Contract ID (`shared/cod.ts`), booking date + weight, COD amount in figures and words, the receiver, and the sender (or the shop). Both kinds print together, 2 per A4 page. `cod: false` in `shared/features.ts` hides COD again.
+**Prepaid and COD** (since 3 Nov 2026): staff tap Prepaid or COD before pasting. Prepaid works exactly as before (amount optional). COD orders need an amount and print the shop's India Post COD label: the fixed Booking Under / Customer ID / Contract ID / BNPL HUB lines (`shared/cod.ts`) with weight + date, "COD FOR RUPEES : 1999/-ONE THOUSAND … ONLY", the receiver, "COD 1999 (Size 8 …)" and From = the shop. Both kinds print together, 2 per A4 page. `cod: false` in `shared/features.ts` hides COD again.
 
 Built from **BRD v1.0** (12 screens, 9 staff permissions, duplicate protection) in the **Clean Blue** UI template.
 

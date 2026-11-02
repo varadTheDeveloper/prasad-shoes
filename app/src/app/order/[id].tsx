@@ -5,10 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { Banner, Button, Card, Loading, Muted, Page, Pill, Row } from '@/components/ui';
-import { OrderForm, emptyForm, formFromOrder, formToLabel, toInput, validate, type FormKey, type FormState } from '@/components/OrderForm';
+import { OrderForm, emptyForm, formFromOrder, formToLabel, toInput, validate, withType, type FormKey, type FormState } from '@/components/OrderForm';
 import { ToPreview } from '@/components/LabelPreview';
 import { AddressNotes, mismatchKey, usePinCheck } from '@/components/AddressChecks';
-import { findUnused } from '@shared/parser';
+import { codRemainder, findUnused } from '@shared/parser';
+import type { PaymentType } from '@shared/types';
 import { dayTime } from '@/lib/format';
 import { C } from '@/lib/theme';
 import type { Order } from '@shared/types';
@@ -36,7 +37,12 @@ export default function OrderDetail() {
   const [keptMismatch, setKeptMismatch] = useState<Set<string>>(new Set());
   const pin = usePinCheck(form ?? emptyForm());
   const unused = useMemo(
-    () => (form && o?.raw_message ? findUnused(o.raw_message, form as unknown as Record<string, string>).filter((l) => !ignored.has(l)) : []),
+    () =>
+      form && o?.raw_message
+        ? findUnused(form.payment_type === 'COD' ? codRemainder(o.raw_message) : o.raw_message, form as unknown as Record<string, string>).filter(
+            (l) => !ignored.has(l),
+          )
+        : [],
     [form, o, ignored],
   );
 
@@ -69,7 +75,8 @@ export default function OrderDetail() {
 
   const canEdit = !o.deleted_at && (editAll || (editOwn && o.created_by === me?.id));
   const change = (k: FormKey, v: string) => {
-    setForm((f) => ({ ...f!, [k]: v }));
+    // Prepaid <-> COD: Prepaid keeps no COD details (the server clears them too).
+    setForm((f) => (k === 'payment_type' ? withType(f!, v as PaymentType) : { ...f!, [k]: v }));
     setConfirmDelete(false);
     if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
   };
@@ -175,6 +182,7 @@ export default function OrderDetail() {
           errors={errors}
           highlight={pin.check?.warnings.map((w) => w.field) ?? []}
           showAmount={showAmount}
+          typePicker
         />
       </View>
 

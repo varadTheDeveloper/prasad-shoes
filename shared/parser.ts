@@ -558,3 +558,200 @@ export function normaliseForHash(text: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+// =============================================================================================
+// COD booking messages
+// ---------------------------------------------------------------------------------------------
+// A COD message has, besides the receiver's address, some of: Booking Date, Weight, COD amount
+// (figures and/or words), "Size 8 pona sanke awaj" and maybe a "From" block. Lines with the fixed
+// India Post details (Booking Under / Customer ID / Contract ID / BNPL HUB) are dropped: those always
+// come from shared/cod.ts. "From" on a COD label is always the shop, so a "From" block in the
+// message is skipped (it must not end up in the receiver's address).
+//
+//  1. Each line is checked for the COD details, which are taken out of the line.
+//  2. What is left is split into the receiver part ("To" / everything else) and the "From" part
+//     (after a "From" / "Sender" heading, up to a "To" heading – or a blank line when the
+//     message has no "To" heading). The "From" part is not used.
+//  3. The receiver part is read with parseWhatsApp, so all its rules (labels, typos, Marathi / Hindi,
+//     phones, pincode) work for COD messages too.
+//  4. "Size 8 pona sanke awaj" -> size "8", note "pona sanke awaj" (printed "COD 1999 (Size 8 pona sanke awaj)").
+// =============================================================================================
+
+export type CodField = 'booking_date' | 'weight' | 'note';
+
+export interface CodParseResult extends Omit<ParseResult, 'filled' | 'missing' | 'guessed'> {
+  booking_date: string; // 'YYYY-MM-DD' or ''
+  weight: string; // '800 g', '1.2 kg' or ''
+  note: string; // product description written after the size ("pona sanke awaj") or ''
+  filled: (ParsedField | CodField)[];
+  missing: (ParsedField | CodField)[];
+  guessed: (ParsedField | CodField)[];
+}
+
+const COD_FIXED_LINE = /^(?:booking\s*(?:under|office|division|branch)|booked\s*(?:under|at)|customer\s*(?:id|no|code)|cust\.?\s*(?:id|no)|contract\s*(?:id|no|number)|bnpl\b|पुणे\s*सिटी\s*वेस्ट)/i;
+const DATE_WORDS = '(?:booking\\s*date|booking\\s*dt|book(?:ing|ed)?\\s*on|date\\s*of\\s*booking|date|dt|दिनांक|तारीख)';
+const NUM_DATE = '(\\d{1,2})\\s*[\\/.\\-]\\s*(\\d{1,2})(?:\\s*[\\/.\\-]\\s*(\\d{2,4}))?';
+const ISO_DATE = '(\\d{4})-(\\d{1,2})-(\\d{1,2})';
+const MON_DATE = '(\\d{1,2})(?:st|nd|rd|th)?[\\s\\-\\/.]*([A-Za-z]{3,9})\\.?[\\s\\-\\/.,]*(\\d{2,4})?';
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const DATE_RE = new RegExp(`(?<![\\p{L}])${DATE_WORDS}\\s*[:：\\-=.]*\\s*(?:${ISO_DATE}|${NUM_DATE}|${MON_DATE})`, 'iu');
+const WEIGHT_RE = /(?<![a-z])(?:weight|wght|wgt|wt|वजन)\.?\s*[:：\-=.]*\s*(\d+(?:\.\d+)?)\s*(kgs?|kilo(?:gram)?s?|grams?|gms?|gm|g|ग्रॅम|किलो)?\.?(?![a-z])/i;
+const COD_AMOUNT_RE = /(?:^|[\s(])(?:cod|c\.o\.d\.?|cash\s*on\s*delivery)\s*(?:amount|amt|value|charges?|for\s*rupees|for\s*rs\.?)?\s*(?:rs\.?|₹|inr)?\s*[:：\-=.]*\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+const NUMBER_WORDS =
+  /^(?:rs\.?|rupees?|inr|in\s*words|amount\s*in\s*words|only|and|paise|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakh|lakhs|lac|crore|[\s,.:\-–()/])+$/i;
+const FROM_HEAD = /^(?:from|frm|sender|sender'?s?\s*(?:details?|address|name)|consignor|prashak|प्रेषक|पाठवणारा|पाठवणार|भेजने\s*वाला)\b\s*[:：,\-–—.]*\s*(.*)$/i;
+const TO_HEAD = /^(?:to|receiver|reciever|recipient|consignee|deliver(?:y)?\s*to|ship\s*to|प्रति|प्राप्तकर्ता)\b(?:'?s?\s*(?:details?|address|name))?\s*[:：,\-–—.]*\s*(.*)$/i;
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+/** A day / month / year found in the message -> 'YYYY-MM-DD', or '' when it is not a real date. */
+function isoFrom(day: number, month: number, year: number | null, today = new Date()): string {
+  let y = year ?? today.getFullYear();
+  if (y < 100) y += 2000;
+  const d = new Date(Date.UTC(y, month - 1, day));
+  if (month < 1 || month > 12 || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return '';
+  return `${y}-${pad2(month)}-${pad2(day)}`;
+}
+
+/** "Booking Date: 02/11/2026", "Date 2-11-26", "Dt. 2 Nov 2026", "2026-11-02" -> '2026-11-02'. */
+export function findBookingDate(line: string): { iso: string; match: string } | null {
+  const m = toAsciiDigits(line).match(DATE_RE);
+  if (!m) return null;
+  let iso = '';
+  if (m[1]) iso = isoFrom(+m[3], +m[2], +m[1]);
+  else if (m[4]) iso = isoFrom(+m[4], +m[5], m[6] ? +m[6] : null); // Indian order: day / month / year
+  else if (m[7]) {
+    const mon = MONTHS.indexOf(m[8].slice(0, 3).toLowerCase());
+    if (mon >= 0) iso = isoFrom(+m[7], mon + 1, m[9] ? +m[9] : null);
+  }
+  return iso ? { iso, match: m[0] } : null;
+}
+
+/** "Weight: 800 gm" -> '800 g', "Wt 1.2kg" -> '1.2 kg'. A number without a unit: 50 and more = grams. */
+export function findWeight(line: string): { weight: string; match: string } | null {
+  const m = toAsciiDigits(line).match(WEIGHT_RE);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!(n > 0)) return null;
+  const unit = (m[2] ?? '').toLowerCase();
+  const kg = /^(?:kg|kgs|kilo|किलो)/.test(unit) || (!unit && n < 50);
+  return { weight: `${m[1]} ${kg ? 'kg' : 'g'}`, match: m[0] };
+}
+
+/** One line of a COD message with the COD details taken out. */
+interface CodLine {
+  rest: string; // what is left for the address reading ('' = nothing left)
+  date?: string;
+  weight?: string;
+  amount?: number | null;
+}
+
+function codLine(raw: string): CodLine {
+  const fixed = COD_FIXED_LINE.test(raw); // "BNPL HUB Pune 411001, Weight : 800 g  Date : 02/11/2026": date / weight still read
+  let rest = raw;
+  const out: CodLine = { rest: '' };
+  const d = findBookingDate(rest);
+  if (d) {
+    out.date = d.iso;
+    rest = toAsciiDigits(rest).replace(d.match, ' ');
+  }
+  const w = findWeight(rest);
+  if (w) {
+    out.weight = w.weight;
+    rest = toAsciiDigits(rest).replace(w.match, ' ');
+  }
+  const a = toAsciiDigits(rest).match(COD_AMOUNT_RE);
+  if (a) {
+    out.amount = parseAmount(a[1]);
+    // "COD 1999 (Size 8 pona sanke awaj)": the size part is kept and read as "Size 8 pona sanke awaj".
+    const size = rest.match(/\(\s*((?:size|sizes|साइज|साईज|माप)\b[^)]*)\)?/i);
+    // Otherwise the amount line (often with the amount in words) holds nothing for the address.
+    rest = size ? size[1] : '';
+  }
+  // "(Rupees One Thousand Two Hundred Only)" – the words are printed from the number instead.
+  if (rest.trim() && NUMBER_WORDS.test(rest.trim()) && /[a-z]{3}/i.test(rest)) rest = '';
+  if (fixed) rest = '';
+  out.rest = rest.replace(/^[\s,|;:\-–—]+|[\s,|;:\-–—]+$/g, '').replace(/\s{2,}/g, ' ');
+  // "Booking Date: …  Weight: …" leave only separators behind.
+  if (out.rest && !/[\p{L}\p{N}]/u.test(out.rest)) out.rest = '';
+  return out;
+}
+
+/** The receiver and sender parts of a COD message, without the COD lines. */
+function splitCod(text: string) {
+  const lines = messageLines(text);
+  const hasTo = lines.some((l) => {
+    const m = l.match(TO_HEAD);
+    return !!m && !FROM_HEAD.test(l);
+  });
+  const to: string[] = [];
+  const from: string[] = [];
+  let date = '';
+  let weight = '';
+  let amount: number | null = null;
+  let mode: 'to' | 'from' = 'to';
+  for (const raw of lines) {
+    if (!raw) {
+      if (mode === 'from' && !hasTo && from.length) mode = 'to';
+      (mode === 'to' ? to : from).push('');
+      continue;
+    }
+    const c = codLine(raw);
+    if (c.date && !date) date = c.date;
+    if (c.weight && !weight) weight = c.weight;
+    if (c.amount != null && amount === null) amount = c.amount;
+    const line = c.rest;
+    if (!line) continue;
+    const fh = line.match(FROM_HEAD);
+    if (fh) {
+      mode = 'from';
+      if (cleanValue(fh[1])) from.push(fh[1]);
+      continue;
+    }
+    const th = line.match(TO_HEAD);
+    if (th) {
+      mode = 'to';
+      // "To, Ramesh Patil" keeps the name (parseWhatsApp reads "To, <name>").
+      if (cleanValue(th[1])) to.push(`To, ${cleanValue(th[1])}`);
+      continue;
+    }
+    (mode === 'to' ? to : from).push(line);
+  }
+  return { to: to.join('\n'), from: from.join('\n'), date, weight, amount };
+}
+
+/** "8 pona sanke awaj" -> size "8" + description "pona sanke awaj". A size without words stays as it is. */
+export function splitSize(size: string): { size: string; note: string } {
+  const m = size.trim().match(/^(\d{1,2}(?:\.5)?)\s*(?:no\.?|number|नंबर|नं\.?)?\s*[,\-–:]?\s*(\D.*)$/i);
+  return m && /\p{L}{2,}/u.test(m[2]) ? { size: m[1], note: m[2].trim() } : { size: size.trim(), note: '' };
+}
+
+/** COD message -> receiver fields (same as parseWhatsApp) + booking date, weight, COD amount, size + description. */
+export function parseCodMessage(text: string): CodParseResult {
+  const parts = splitCod(text);
+  const r = parseWhatsApp(parts.to);
+  const sz = splitSize(r.size);
+  const out: CodParseResult = {
+    ...r,
+    size: sz.size,
+    note: sz.note,
+    amount: parts.amount ?? r.amount,
+    booking_date: parts.date,
+    weight: parts.weight,
+    filled: [...r.filled.filter((k) => k !== 'amount')],
+    missing: [...r.missing],
+    guessed: [...r.guessed],
+  };
+  if (out.amount !== null) out.filled.push('amount');
+  else out.missing.push('amount'); // COD needs an amount
+  for (const k of ['booking_date', 'weight', 'note'] as const) if (out[k]) out.filled.push(k);
+  return out;
+}
+
+/** The receiver part of a COD message, without its COD lines (date, weight, amount, fixed details,
+ *  the "From" block) – what findUnused checks. */
+export function codRemainder(text: string): string {
+  return splitCod(text).to;
+}

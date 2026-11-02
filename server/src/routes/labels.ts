@@ -15,7 +15,10 @@ async function loadShop(): Promise<LabelShop> {
 }
 
 const LABEL_COLS = `id, ship_name, address, landmark, district, state, pincode, mobile1, mobile2, product_name, size, note,
-  payment_type, amount, is_printed, created_by`;
+  payment_type, amount, is_printed, created_by, weight`;
+/** Columns for the label, with table prefix p ('o.' or ''); the booking date as 'YYYY-MM-DD' text. */
+const labelCols = (p = '') =>
+  `${LABEL_COLS.split(',').map((c) => p + c.trim()).join(', ')}, to_char(${p}booking_date, 'YYYY-MM-DD') AS booking_date`;
 
 function istDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()); // 2026-10-18
@@ -45,7 +48,7 @@ r.post(
     const { orderIds, markPrinted } = body.parse(req.body);
     const u = req.user;
     const ids = [...new Set(orderIds)];
-    const { rows } = await q(`SELECT ${LABEL_COLS} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
+    const { rows } = await q(`SELECT ${labelCols()} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
     const byId = new Map(rows.map((o) => [o.id, o]));
     // One combined list: orders saved by the owner and by every staff member print together,
     // in the order the user selected them.
@@ -108,7 +111,7 @@ r.get(
     if (!can(req.user, 'LABEL_REPRINT')) throw forbidden('Only the owner can download an earlier file again');
     const id = Number(req.params.id);
     const { rows } = await q(
-      `SELECT ${LABEL_COLS.split(',').map((c) => 'o.' + c.trim()).join(', ')}
+      `SELECT ${labelCols('o.')}
          FROM label_batch_orders bo JOIN orders o ON o.id = bo.order_id
         WHERE bo.batch_id = $1 AND o.deleted_at IS NULL ORDER BY bo.position`,
       [id],

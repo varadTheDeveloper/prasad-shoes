@@ -36,7 +36,15 @@ import {
   VerticalAlign,
   WidthType,
 } from 'docx';
-import { fromLines, orderLine, toLines, type LabelOrder, type LabelShop } from '../../../shared/label';
+import {
+  codHeadLines,
+  codOrderLine,
+  fromLines,
+  orderLine,
+  toLines,
+  type LabelOrder,
+  type LabelShop,
+} from '../../../shared/label';
 
 const FONT = 'Nirmala UI'; // ships with Windows; prints English, Marathi and Hindi
 const SIZE = 28; // half-points -> 14 pt (smaller automatically for very long addresses)
@@ -100,6 +108,49 @@ function fromBlock(shop: LabelShop): Paragraph[] {
   ];
 }
 
+// ---- COD label (India Post) ---------------------------------------------------------------------
+// Same half-page and cut line as Prepaid; the shop's printed COD layout inside:
+//   4 header lines, centred (Customer ID line and the COD FOR RUPEES line bold) ->
+//   "TO, <name>" + address, right-aligned (as Prepaid) -> "COD 1999 (Size 8 …)" (bold, as the Prepaid line) ->
+//   "From :-" + the shop, left-aligned (as Prepaid).
+// The COD label has 4 more lines, so its font is picked to fit the half page (14 pt down to 9 pt).
+const COD_TO_GAP = 200;
+const COD_LINE_GAP = 160; // as the Prepaid "PREPAID (…)" line
+// Height the text may use in each half (the smaller of the two halves, minus a safety band).
+const COD_ROOM = Math.min(TOP_HALF - 120, BOTTOM_HALF - CUT_GAP) - 300;
+
+/** Biggest font (half-points) at which every COD line fits in its half of the page. */
+export function codSize(o: LabelOrder, shop: LabelShop): number {
+  const lines = [...codHeadLines(o), `TO, ${o.ship_name}`, ...toLines(o), codOrderLine(o), 'From :-', ...fromLines(shop)];
+  for (const size of [28, 26, 24, 22, 20, 18]) {
+    const perLine = Math.floor((55 * 28) / size); // ~55 characters per line at 14 pt
+    const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+    // Nirmala UI line = font size x 1.33, x 1.1 for the paragraph line spacing (264/240); 20 twips per point
+    const height = rows * (size / 2) * 20 * 1.33 * 1.1 + COD_TO_GAP + COD_LINE_GAP + FROM_GAP;
+    if (height <= COD_ROOM) return size;
+  }
+  return 18;
+}
+
+function codBlock(o: LabelOrder, shop: LabelShop, spaceBefore: number): Paragraph[] {
+  const size = codSize(o, shop);
+  const at = (before: number) => (before ? { spacing: { before, after: 0, line: 264 } } : {});
+  return [
+    ...codHeadLines(o).map((l, i) => para(AlignmentType.CENTER, [run(l, size, { bold: i === 1 || i === 3 })], at(i === 0 ? spaceBefore : 0))),
+    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], at(COD_TO_GAP)),
+    ...toLines(o).map((l) => para(AlignmentType.RIGHT, [run(l, size)])),
+    para(AlignmentType.RIGHT, [run(codOrderLine(o), size, { bold: true })], at(COD_LINE_GAP)),
+    para(AlignmentType.LEFT, [run('From :-', size, { bold: true, underline: true })], at(FROM_GAP)),
+    ...fromLines(shop).map((l) => para(AlignmentType.LEFT, [run(l, size)])),
+  ];
+}
+
+/** The text of one label: the COD template for COD orders, the (unchanged) Prepaid one otherwise. */
+function labelBlock(o: LabelOrder, shop: LabelShop, spaceBefore: number): Paragraph[] {
+  if (o.payment_type === 'COD') return codBlock(o, shop, spaceBefore);
+  return [...toBlock(o, spaceBefore), ...fromBlock(shop)];
+}
+
 const NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 const DASHED = { style: BorderStyle.DASHED, size: 8, color: '000000' };
 
@@ -119,7 +170,7 @@ const row = (height: number, c: TableCell) => new TableRow({ height: { value: he
 /** One half of the page: TO block (right), the COD/PREPAID line, then From (left) right under it.
  *  The rest of the half stays blank, so there is plenty of room around the cut line. */
 function half(o: LabelOrder | null, shop: LabelShop, height: number, cutLineBelow: boolean, spaceBefore: number): TableRow[] {
-  return [row(height, cell(o ? [...toBlock(o, spaceBefore), ...fromBlock(shop)] : [], VerticalAlign.TOP, cutLineBelow))];
+  return [row(height, cell(o ? labelBlock(o, shop, spaceBefore) : [], VerticalAlign.TOP, cutLineBelow))];
 }
 
 function pageTable(top: LabelOrder | null, bottom: LabelOrder | null, shop: LabelShop) {

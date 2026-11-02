@@ -5,7 +5,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { C, R } from '@/lib/theme';
 import { niceDate, toISO } from './dateText';
 
-export function DateField({ label, value, onChange, min, max }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string }) {
+export function DateField({ label, value, onChange, min, max, placeholder = 'Any date' }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string; placeholder?: string }) {
   const [ios, setIos] = useState(false);
   const d = value ? new Date(`${value}T12:00:00`) : new Date();
   const open = () => {
@@ -15,9 +15,9 @@ export function DateField({ label, value, onChange, min, max }: { label: string;
   };
   return (
     <View style={{ flex: 1 }}>
-      <Text style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>{label}</Text>
+      {label ? <Text style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>{label}</Text> : null}
       <Pressable onPress={open} style={{ borderWidth: 1, borderColor: C.border, borderRadius: R.input, backgroundColor: C.card, paddingVertical: 11, paddingHorizontal: 12 }}>
-        <Text style={{ fontSize: 16, color: value ? C.text : C.muted }}>📅  {value ? niceDate(value) : 'Any date'}</Text>
+        <Text style={{ fontSize: 16, color: value ? C.text : C.muted }}>📅  {value ? niceDate(value) : placeholder}</Text>
       </Pressable>
       {ios ? (
         <DateTimePicker

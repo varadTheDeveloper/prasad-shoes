@@ -1,22 +1,23 @@
-// On/off switches for features that are built but not offered yet.
-// The app (hides the screens/fields) and the server (stores the safe default) both read this file.
+// On/off switches for features. The app (shows/hides screens and fields) and the server
+// (stores the safe default) both read this file.
 
 export const FEATURES = {
   /**
-   * Cash on Delivery. OFF for now: every order is saved as PREPAID, the COD choice and COD
-   * totals are hidden everywhere. To offer COD later, set this to true and rebuild the app +
-   * server – all COD code (validation, label line "COD 1299 (...)", COD totals) is still in place.
+   * Cash on Delivery. ON since 3 Nov 2026: staff pick Prepaid or COD before pasting.
+   * COD orders print the COD label (fixed India Post details from shared/cod.ts, weight + date,
+   * COD amount in figures and words, receiver, "COD 1999 (Size 8 …)", From = the shop).
+   * Set to false to hide COD again: every new order is then saved as PREPAID.
    */
-  cod: false,
+  cod: true,
 } as const;
 
 export type PaymentType = 'COD' | 'PREPAID';
 
-/** Payment type for new orders. */
-export const DEFAULT_PAYMENT: PaymentType = FEATURES.cod ? 'COD' : 'PREPAID';
+/** Shipment type for new orders: Prepaid unless COD is picked. */
+export const DEFAULT_PAYMENT: PaymentType = 'PREPAID';
 
-/** What is actually saved: while COD is off, everything is PREPAID. */
+/** What is actually saved: COD only when COD is on and was picked, otherwise PREPAID. */
 export function effectivePayment(p: string | null | undefined): PaymentType {
   if (!FEATURES.cod) return 'PREPAID';
-  return p === 'PREPAID' ? 'PREPAID' : 'COD';
+  return p === 'COD' ? 'COD' : 'PREPAID';
 }

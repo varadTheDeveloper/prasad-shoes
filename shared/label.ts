@@ -1,6 +1,7 @@
 // What gets printed on one parcel label. Used by the Word file (server) and the preview (app),
 // so both always show exactly the same text.
 import { stripContactInfo } from './parser';
+import { COD_FIXED, amountInWords, printDate } from './cod';
 
 export interface LabelOrder {
   ship_name: string;
@@ -16,6 +17,9 @@ export interface LabelOrder {
   note?: string | null;
   payment_type: 'COD' | 'PREPAID';
   amount?: number | null;
+  // COD only
+  booking_date?: string | null;
+  weight?: string | null;
 }
 
 export interface LabelShop {
@@ -73,6 +77,47 @@ export function fromLines(s: LabelShop): string[] {
     dot([s.address2?.trim(), s.city_pin.trim()].filter(Boolean).join(', ')),
     dot(`Mob. ${s.phones.trim()}`),
   ];
+}
+
+// ------------------------------------------------------------------------------------------------
+// COD label (India Post) – same layout as the shop's printed COD labels:
+//
+//               Booking Under Pune City West Division                       (centred)
+//          Customer ID : 1634841966, Contract ID – 41282773                (centred, bold)
+//      BNPL HUB Pune 411001, Weight : 800 g    Date : 03/11/2026           (centred)
+//   COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY      (centred, bold)
+//                                                   TO, <name>             (right, as Prepaid)
+//                                                   address … (toLines)
+//                                                   COD 1999 (Size 8 pona sanke awaj)
+//   From :-  <shop>                                                         (left, as Prepaid)
+//
+// The fixed values come from shared/cod.ts. The Prepaid label above is not changed by any of this.
+// ------------------------------------------------------------------------------------------------
+const BLANK = '________';
+
+/** The centred header: 4 lines. Index 1 and 3 are printed bold. A missing weight / date prints a blank. */
+export function codHeadLines(o: LabelOrder): string[] {
+  return [
+    `Booking Under ${COD_FIXED.bookingUnder}`,
+    `Customer ID : ${COD_FIXED.customerId}, Contract ID – ${COD_FIXED.contractId}`,
+    `${COD_FIXED.hub}, Weight : ${o.weight?.trim() || BLANK}    Date : ${printDate(o.booking_date) || BLANK}`,
+    codAmountLine(o),
+  ];
+}
+
+/** "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" (amount from the order). */
+export function codAmountLine(o: LabelOrder): string {
+  const amt = formatAmount(o.amount);
+  return `COD FOR RUPEES : ${amt || BLANK}/-${amountInWords(o.amount ?? null)}`;
+}
+
+/** The line under the address: "COD 1999 (Size 8 pona sanke awaj)" – size and description from the order. */
+export function codOrderLine(o: LabelOrder): string {
+  const size = o.size?.trim();
+  const sizeText = [size ? `Size ${size}` : '', o.note?.trim()].filter(Boolean).join(' ');
+  const parts = [o.product_name?.trim(), sizeText].filter(Boolean);
+  const head = `COD ${formatAmount(o.amount)}`.trim();
+  return parts.length ? `${head} (${parts.join(', ')})` : head;
 }
 
 /** Two orders per A4 page (top half + bottom half). */

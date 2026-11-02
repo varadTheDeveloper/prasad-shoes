@@ -3,6 +3,9 @@
 //   - required fields (name, address, 6-digit pincode, 10-digit mobile, mobile 2 not the same)
 //   - India Post pincode check (red note when the pincode does not exist)
 //   - "Not used" lines: text from the message that ended up in no field
+// Prepaid / COD is picked first (buttons above the paste box). COD messages are read with the COD
+// reader (COD amount, size + description, booking date, weight); switching type starts the form again from the
+// same message, so Prepaid and COD details never mix.
 // Warnings never block: the first Save tap shows them, the second tap ("Checked – Save") saves.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,24 +16,37 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { usePermission } from '@/lib/auth';
 import { Banner, Button, Field, Input, Pill, Row } from '@/components/ui';
-import { OrderForm, emptyForm, formToLabel, toInput, validate, type FormKey, type FormState } from '@/components/OrderForm';
+import { COD_KEYS, OrderForm, TypeButtons, emptyForm, formToLabel, toInput, validate, type FormKey, type FormState } from '@/components/OrderForm';
 import { DuplicateSheet } from '@/components/DuplicateSheet';
 import { ToPreview } from '@/components/LabelPreview';
 import { AddressNotes, mismatchKey, mismatchText, usePinCheck } from '@/components/AddressChecks';
-import { findUnused, parseWhatsApp, type ParseResult } from '@shared/parser';
+import { codRemainder, findUnused, parseCodMessage, parseWhatsApp } from '@shared/parser';
+import { FEATURES } from '@shared/features';
 import { C, R } from '@/lib/theme';
-import type { DuplicateMatch, Order } from '@shared/types';
+import type { DuplicateMatch, Order, PaymentType } from '@shared/types';
 
 const PARSED_KEYS = ['ship_name', 'address', 'landmark', 'district', 'state', 'pincode', 'mobile1', 'mobile2', 'size'] as const;
+
+/** What the "N fields auto-filled" chip and the highlights need from either reader. */
+interface Parsed {
+  filled: string[];
+  missing: string[];
+  guessed: string[];
+}
 
 export function usePasteOrder() {
   const qc = useQueryClient();
   const showAmount = usePermission('ORDER_VIEW_AMOUNT');
 
   const [raw, setRaw] = useState('');
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => emptyForm());
+  // Prepaid / COD: picked before pasting, kept for the next order.
+  const typeRef = useRef<PaymentType>(form.payment_type);
+  const type = form.payment_type;
+  // COD amount is needed to save a COD order, so it can be typed even without "See amounts".
+  const amountOn = showAmount || type === 'COD';
   const [touched, setTouched] = useState<Set<FormKey>>(new Set());
-  const [parsed, setParsed] = useState<ParseResult | null>(null);
+  const [parsed, setParsed] = useState<Parsed | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [dup, setDup] = useState<{ message: string; matches: DuplicateMatch[]; canOverride: boolean } | null>(null);
@@ -48,8 +64,11 @@ export function usePasteOrder() {
 
   const pin = usePinCheck(form);
   const unused = useMemo(
-    () => (raw.trim() ? findUnused(raw, form as unknown as Record<string, string>).filter((l) => !ignored.has(l)) : []),
-    [raw, form, ignored],
+    () =>
+      raw.trim()
+        ? findUnused(type === 'COD' ? codRemainder(raw) : raw, form as unknown as Record<string, string>).filter((l) => !ignored.has(l))
+        : [],
+    [raw, form, ignored, type],
   );
 
   // Empty District / State are filled from the India Post list. A District / State that the message
@@ -78,19 +97,29 @@ export function usePasteOrder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin.check]);
 
-  function applyPaste(text: string) {
+  function applyPaste(text: string, t: PaymentType = typeRef.current, touchedNow: Set<FormKey> = touched) {
     setRaw(text);
     setSaved(null);
     setClipNote('');
     setAskAck(false);
-    const p = parseWhatsApp(text);
+    const cod = t === 'COD';
+    const p = cod ? parseCodMessage(text) : parseWhatsApp(text);
     setParsed(text.trim() ? p : null);
     setForm((f) => {
       const next = { ...f };
       PARSED_KEYS.forEach((k) => {
-        if (!touched.has(k) || !f[k]) next[k] = p[k];
+        if (!touchedNow.has(k) || !f[k]) next[k] = p[k];
       });
-      if (p.amount !== null && (!touched.has('amount') || !f.amount)) next.amount = String(p.amount);
+      if (p.amount !== null && (!touchedNow.has('amount') || !f.amount)) next.amount = String(p.amount);
+      if (cod && 'booking_date' in p) {
+        COD_KEYS.forEach((k) => {
+          // No date in the message: keep the date already there (today by default).
+          if (k === 'booking_date' && !p[k]) return;
+          if (!touchedNow.has(k) || !f[k]) next[k] = p[k];
+        });
+        // "Size 8 pona sanke awaj": the words after the size go to Note -> "COD 1999 (Size 8 pona sanke awaj)"
+        if (p.note && (!touchedNow.has('note') || !f.note)) next.note = p.note;
+      }
       return next;
     });
     setAutoFilled(new Set());
@@ -109,9 +138,9 @@ export function usePasteOrder() {
     if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }));
   }
 
-  function clear() {
+  function clear(t: PaymentType = typeRef.current) {
     setRaw('');
-    setForm(emptyForm());
+    setForm(emptyForm(t));
     setTouched(new Set());
     setParsed(null);
     setErrors({});
@@ -124,13 +153,23 @@ export function usePasteOrder() {
     requestId.current = Crypto.randomUUID();
   }
 
+  /** Prepaid <-> COD: the form starts again (same message, read for the new type) – nothing mixes. */
+  function setType(t: PaymentType) {
+    if (t === typeRef.current) return;
+    typeRef.current = t;
+    const text = raw;
+    clear(t);
+    setSaved(null);
+    if (text.trim()) applyPaste(text, t, new Set());
+  }
+
   async function pasteFromClipboard() {
     try {
       const t = await Clipboard.getStringAsync();
       if (t?.trim()) {
         clear();
         setSaved(null);
-        applyPaste(t);
+        applyPaste(t, typeRef.current, new Set());
       } else setClipNote('Nothing copied. In WhatsApp, long-press the customer’s message → Copy, then tap Paste again.');
     } catch {
       setClipNote(Platform.OS === 'web' ? 'Press Ctrl+V in the box below to paste.' : 'Could not read the copied text. Paste it in the box below.');
@@ -163,7 +202,7 @@ export function usePasteOrder() {
 
   async function save(force = false) {
     setTopError('');
-    const e = validate(form, showAmount);
+    const e = validate(form, amountOn);
     if (Object.keys(e).length) {
       setErrors(e);
       setTopError('Please fill the fields marked in red.');
@@ -178,7 +217,7 @@ export function usePasteOrder() {
     setSaving(true);
     try {
       const order = await api<Order>('POST', '/orders', {
-        ...toInput(form, showAmount),
+        ...toInput(form, amountOn),
         raw_message: raw,
         client_request_id: requestId.current,
         force: force || undefined,
@@ -213,7 +252,8 @@ export function usePasteOrder() {
   ];
 
   return {
-    raw, form, parsed, errors, saving, dup, saved, topError, clipNote, unused, pin, showAmount, askAck: askAck && notes.length > 0,
+    raw, form, parsed, errors, saving, dup, saved, topError, clipNote, unused, pin, showAmount: amountOn, askAck: askAck && notes.length > 0,
+    type, setType,
     noteCount: notes.length, highlight, autoFilled, needsAck, mismatch, applyPincodeValues, keepTyped,
     applyPaste, change, clear, pasteFromClipboard, addToAddress, ignore, save, setDup,
     label: formToLabel(form),
@@ -225,11 +265,19 @@ export type PasteOrderState = ReturnType<typeof usePasteOrder>;
 /** Big paste button + the message box. */
 export function PasteBox({ s, wide }: { s: PasteOrderState; wide?: boolean }) {
   const has = !!(s.raw || s.form.ship_name);
+  const cod = s.type === 'COD';
   return (
     <View>
+      {FEATURES.cod ? (
+        <Field label="Shipment type – pick before pasting">
+          <TypeButtons value={s.type} onChange={s.setType} />
+        </Field>
+      ) : null}
       <Pressable onPress={s.pasteFromClipboard} style={({ pressed }) => [st.pasteBig, pressed && { opacity: 0.85 }]}>
-        <Text style={st.pasteBigText}>📋  Paste from WhatsApp</Text>
-        <Text style={st.pasteBigSub}>Copy the customer’s address message, then tap here</Text>
+        <Text style={st.pasteBigText}>{cod ? '📋  Paste COD booking message' : '📋  Paste from WhatsApp'}</Text>
+        <Text style={st.pasteBigSub}>
+          {cod ? 'Copy the COD booking message (date, weight, amount, address), then tap here' : 'Copy the customer’s address message, then tap here'}
+        </Text>
       </Pressable>
       {s.clipNote ? <Banner kind="info" text={s.clipNote} /> : null}
       <Field label="Message">
@@ -253,7 +301,7 @@ export function PasteBox({ s, wide }: { s: PasteOrderState; wide?: boolean }) {
           <View />
         )}
         {has ? (
-          <Pressable onPress={s.clear} hitSlop={10}>
+          <Pressable onPress={() => s.clear()} hitSlop={10}>
             <Text style={{ color: C.muted, fontSize: 15 }}>Clear</Text>
           </Pressable>
         ) : null}

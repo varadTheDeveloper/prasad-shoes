@@ -30,10 +30,10 @@ $env:API_URL="http://localhost:3000"; $env:OWNER_MOBILE="7020861805"; $env:OWNER
 cd app; npx tsc --noEmit
 ```
 
-## Live setup (as of 21 Oct 2026)
-- Server: **AWS EC2**, Mumbai (ap-south-1), Ubuntu 24.04, 20 GB disk, Elastic IP **13.203.156.41**.
+## Live setup (as of 2 Nov 2026)
+- Server: **AWS EC2**, Mumbai (ap-south-1), Ubuntu 24.04, 20 GB disk, Elastic IP **65.2.112.70** (new on 2 Nov 2026 – the old 13.203.156.41 was released; old APKs point to it and stop working).
   Security group: 22, 80, 443 only (PostgreSQL 5432 stays closed). Login user `ubuntu`, key `prasad-key` (.pem, not in Git).
-- Website + API: **https://13-203-156-41.sslip.io** (free sslip.io name + Let's Encrypt, renews itself).
+- Website + API: **https://65-2-112-70.sslip.io** (free sslip.io name + Let's Encrypt, renews itself).
   Health check: `/api/health`. API runs under PM2 as `prasad-api`; code in `/opt/prasad-shoes`, website in `/var/www/prasad-shoes`.
 - Database: PostgreSQL 16 on the same server, db `prasad_shoes`, users `ps_owner` (migrations) / `ps_app` (API).
   Passwords only in `~/prasad-shoes-db-credentials.txt` and `/opt/prasad-shoes/server/.env` on the server – never print or commit them.
@@ -50,12 +50,12 @@ rm -rf /tmp/ps-release && mkdir -p /tmp/ps-release && cp -r ../server ../shared 
 rm -rf /tmp/ps-release/server/node_modules /tmp/ps-release/server/.env
 bash ~/prasad-shoes/deploy/release.sh /tmp/ps-release          # build API, run migrations, restart PM2, publish website
 ```
-(Alternative from Windows: `deploy\upload.ps1 -Server ubuntu@13.203.156.41`, see docs/GUIDE.md.)
+(Alternative from Windows: `deploy\upload.ps1 -Server ubuntu@65.2.112.70`, see docs/GUIDE.md.)
 Owner login (re)set: `cd /opt/prasad-shoes/server && npm run seed -- --name Owner --mobile 7020861805 --password "<strong>"`.
 
 ## New APK (only when screens change)
 On the PC: commit + push, then in `app`: `npx eas-cli@latest build --platform android --profile apk`.
-`app/eas.json` already points the APK to `https://13-203-156-41.sslip.io` (must be https).
+`app/eas.json` already points the APK to `https://65-2-112-70.sslip.io` (must be https).
 Server-only changes do not need a new APK.
 
 ## Rules – don't break these

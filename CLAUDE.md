@@ -5,8 +5,9 @@ Save → owner downloads one Word file with **2 labels per A4 page**. Full human
 Owner (Varad) wants things explained in simple language, and the plan explained **before** making changes.
 
 ## Layout
-- `shared/` – used by app and server: `parser.ts` (WhatsApp text → fields, `findUnused`), `label.ts` (label text),
-  `features.ts` (`cod: false`), `permissions.ts`, `types.ts`. Tests in `shared/__tests__/`.
+- `shared/` – used by app and server: `parser.ts` (WhatsApp text → fields, `findUnused`; COD: `parseCodMessage`, `codRemainder`),
+  `label.ts` (label text; COD: `codHeadLines`, `codAmountLines`, `codFromLines`), `cod.ts` (fixed COD details, amount in words),
+  `features.ts` (`cod: true`), `permissions.ts`, `types.ts`. Tests in `shared/__tests__/`.
 - `server/` – Node 24 + Express + PostgreSQL 16 (plain SQL, `pg`). Routes in `src/routes/`, Word file in
   `src/services/docx.ts`, India Post pincode check in `src/services/pincode.ts` + `data/pincodes.json`.
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
@@ -65,5 +66,9 @@ Server-only changes do not need a new APK.
   (no table cell margins – WPS adds them to row heights).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
-- COD is off (`shared/features.ts`): every order is PREPAID, amount optional.
+- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). Prepaid: amount optional, label unchanged.
+  COD: amount required; booking date, weight, sender stored in their own columns (migration 005), cleared when an order is
+  Prepaid. Booking Under / Customer ID / Contract ID are constants in `shared/cod.ts` – never stored, never parsed, always printed.
+  COD label order: fixed details → booking date + weight → COD amount (figures + words) → TO receiver → From (sender, else shop).
+  COD font shrinks (14→9 pt, `codSize` in docx.ts) so a label always fits its half page.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.

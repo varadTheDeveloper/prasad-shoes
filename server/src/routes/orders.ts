@@ -7,6 +7,7 @@ import { can, requireAdmin, requirePermission, type AuthUser } from '../middlewa
 import { audit } from '../services/audit';
 import { normaliseForHash, normaliseMobile } from '../../../shared/parser';
 import { DEFAULT_PAYMENT, effectivePayment } from '../../../shared/features';
+import { isIsoDate } from '../../../shared/cod';
 
 const r = Router();
 
@@ -47,14 +48,37 @@ const fields = {
   product_name: opt(150),
   size: opt(20),
   note: opt(250),
-  // While COD is switched off (shared/features.ts) every order is stored as PREPAID.
+  // Prepaid or COD (shared/features.ts). With COD switched off every order is stored as PREPAID.
   payment_type: z.enum(['COD', 'PREPAID']).default(DEFAULT_PAYMENT).transform(effectivePayment),
   // Optional: blank ('' / null / missing) is saved as blank.
   amount: z.preprocess(
     (v) => (v === '' || v === undefined ? null : v),
     z.coerce.number('Amount must be a number').min(0, 'Amount cannot be negative').max(10_000_000).nullable(),
   ).optional(),
+  // COD only (cleared when the order is Prepaid). The fixed India Post details are not stored.
+  booking_date: z
+    .string()
+    .nullish()
+    .transform((v, ctx) => {
+      if (!v || !v.trim()) return null;
+      if (!isIsoDate(v.trim())) ctx.addIssue({ code: 'custom', message: 'Pick a booking date' });
+      return v.trim();
+    }),
+  weight: opt(20),
+  sender_name: opt(120),
+  sender_address: opt(500),
+  sender_mobile: mobile(false),
 };
+
+const COD_ONLY = ['booking_date', 'weight', 'sender_name', 'sender_address', 'sender_mobile'] as const;
+
+/** Prepaid orders keep no COD details, so the two never mix. */
+function dropCodIfPrepaid<T extends Record<string, any>>(o: T): T {
+  if (o.payment_type !== 'PREPAID') return o;
+  const out: Record<string, any> = { ...o };
+  for (const k of COD_ONLY) out[k] = null;
+  return out as T;
+}
 
 const createBody = z.object({
   ...fields,
@@ -73,11 +97,12 @@ function parseCreate(body: any) {
   if (Object.keys(errs).length || !res.success) {
     throw new HttpError(400, 'VALIDATION', 'Please check the highlighted fields', { fields: errs });
   }
-  return res.data;
+  return dropCodIfPrepaid(res.data);
 }
 
 const ORDER_COLS = `o.id, o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2,
-  o.product_name, o.size, o.note, o.payment_type, o.amount, o.is_printed, o.printed_at, o.dup_override,
+  o.product_name, o.size, o.note, o.payment_type, o.amount, to_char(o.booking_date, 'YYYY-MM-DD') AS booking_date, o.weight,
+  o.sender_name, o.sender_address, o.sender_mobile, o.is_printed, o.printed_at, o.dup_override,
   o.created_by, cu.name AS created_by_name, o.created_at, o.updated_at, o.deleted_at`;
 
 /** Remove amounts for users without ORDER_VIEW_AMOUNT. */
@@ -150,12 +175,14 @@ r.post(
 
       const ins = await c.query(
         `INSERT INTO orders (ship_name, address, landmark, district, state, pincode, mobile1, mobile2, product_name, size, note,
-                             payment_type, amount, raw_message, msg_hash, client_request_id, dup_override, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+                             payment_type, amount, raw_message, msg_hash, client_request_id, dup_override, created_by,
+                             booking_date, weight, sender_name, sender_address, sender_mobile)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
          ON CONFLICT (client_request_id) DO NOTHING
          RETURNING id`,
         [o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note,
-          o.payment_type, amount, o.raw_message, hash, o.client_request_id, Boolean(o.force && dup.rowCount), u.id],
+          o.payment_type, amount, o.raw_message, hash, o.client_request_id, Boolean(o.force && dup.rowCount), u.id,
+          o.booking_date, o.weight, o.sender_name, o.sender_address, o.sender_mobile],
       );
       if (!ins.rowCount) {
         const ex = await c.query(`SELECT id FROM orders WHERE client_request_id = $1`, [o.client_request_id]);
@@ -233,14 +260,16 @@ r.get(
     const { w, p } = listWhere(f, req.user);
     const { rows } = await q(
       `SELECT to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-Mon-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
-              o.district, o.state, o.pincode, o.mobile1, o.mobile2, cu.name AS added_by, o.is_printed
+              o.district, o.state, o.pincode, o.mobile1, o.mobile2, cu.name AS added_by, o.is_printed, o.payment_type,
+              CASE WHEN o.payment_type = 'COD' THEN o.amount END AS cod_amount
          FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
         ORDER BY o.created_at DESC, o.id DESC LIMIT 50000`,
       p,
     );
-    const head = ['Date', 'Customer', 'Address', 'Landmark', 'District', 'State', 'Pincode', 'Mobile 1', 'Mobile 2', 'Added by', 'Printed'];
+    const head = ['Date', 'Customer', 'Address', 'Landmark', 'District', 'State', 'Pincode', 'Mobile 1', 'Mobile 2', 'Added by', 'Printed', 'Type', 'COD amount'];
     const lines = rows.map((r) =>
-      [r.date, r.ship_name, r.address, r.landmark, r.district, r.state, r.pincode, r.mobile1, r.mobile2, r.added_by, r.is_printed ? 'Yes' : 'No']
+      [r.date, r.ship_name, r.address, r.landmark, r.district, r.state, r.pincode, r.mobile1, r.mobile2, r.added_by, r.is_printed ? 'Yes' : 'No',
+        r.payment_type === 'COD' ? 'COD' : 'Prepaid', r.cod_amount]
         .map(csv)
         .join(','),
     );
@@ -296,8 +325,9 @@ r.put(
     const patch = editBody.parse(req.body);
     // Users who cannot see amounts cannot change them either.
     if (!can(u, 'ORDER_VIEW_AMOUNT')) delete patch.amount;
-    const next = { ...before, ...Object.fromEntries(Object.entries(patch).filter(([k, v]) => v !== undefined && k in (req.body ?? {}))) };
+    let next = { ...before, ...Object.fromEntries(Object.entries(patch).filter(([k, v]) => v !== undefined && k in (req.body ?? {}))) };
     next.payment_type = effectivePayment(next.payment_type);
+    next = dropCodIfPrepaid(next);
     if (next.payment_type === 'COD' && !(Number(next.amount) > 0)) {
       throw new HttpError(400, 'VALIDATION', 'Enter COD amount', { fields: { amount: 'Enter COD amount' } });
     }
@@ -308,10 +338,12 @@ r.put(
     await tx(async (c) => {
       await c.query(
         `UPDATE orders SET ship_name=$2, address=$3, landmark=$4, district=$5, state=$6, pincode=$7, mobile1=$8, mobile2=$9,
-                product_name=$10, size=$11, note=$12, payment_type=$13, amount=$14, updated_by=$15, updated_at=now()
+                product_name=$10, size=$11, note=$12, payment_type=$13, amount=$14, updated_by=$15, updated_at=now(),
+                booking_date=$16, weight=$17, sender_name=$18, sender_address=$19, sender_mobile=$20
           WHERE id = $1`,
         [id, next.ship_name, next.address, next.landmark, next.district, next.state, next.pincode, next.mobile1, next.mobile2,
-          next.product_name, next.size, next.note, next.payment_type, next.amount ?? null, u.id],
+          next.product_name, next.size, next.note, next.payment_type, next.amount ?? null, u.id,
+          next.booking_date ?? null, next.weight ?? null, next.sender_name ?? null, next.sender_address ?? null, next.sender_mobile ?? null],
       );
       await audit(c, u.id, 'ORDER_EDIT', 'orders', id, before, next);
     });

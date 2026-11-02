@@ -1,6 +1,7 @@
 // What gets printed on one parcel label. Used by the Word file (server) and the preview (app),
 // so both always show exactly the same text.
 import { stripContactInfo } from './parser';
+import { COD_FIXED, amountInWords, printDate } from './cod';
 
 export interface LabelOrder {
   ship_name: string;
@@ -16,6 +17,12 @@ export interface LabelOrder {
   note?: string | null;
   payment_type: 'COD' | 'PREPAID';
   amount?: number | null;
+  // COD only
+  booking_date?: string | null;
+  weight?: string | null;
+  sender_name?: string | null;
+  sender_address?: string | null;
+  sender_mobile?: string | null;
 }
 
 export interface LabelShop {
@@ -73,6 +80,49 @@ export function fromLines(s: LabelShop): string[] {
     dot([s.address2?.trim(), s.city_pin.trim()].filter(Boolean).join(', ')),
     dot(`Mob. ${s.phones.trim()}`),
   ];
+}
+
+// ------------------------------------------------------------------------------------------------
+// COD label (India Post). Printed in this order:
+//   Booking Under / Customer ID / Contract ID (fixed, shared/cod.ts) -> Booking Date + Weight ->
+//   COD amount (figures + words) -> TO, receiver name + address -> From (sender, or the shop).
+// The Prepaid label above is not changed by any of this.
+// ------------------------------------------------------------------------------------------------
+const BLANK = '__________';
+
+/** The fixed India Post lines + booking date / weight. A missing date / weight prints a blank to write in. */
+export function codHeadLines(o: LabelOrder): string[] {
+  return [
+    `Booking Under: ${COD_FIXED.bookingUnder}`,
+    `Customer ID: ${COD_FIXED.customerId}`,
+    `Contract ID: ${COD_FIXED.contractId}`,
+    `Booking Date: ${printDate(o.booking_date) || BLANK}   Weight: ${o.weight?.trim() || BLANK}`,
+  ];
+}
+
+/** "COD Amount: Rs. 1299/-" and "(Rupees One Thousand Two Hundred Ninety Nine Only)". */
+export function codAmountLines(o: LabelOrder): string[] {
+  const amt = formatAmount(o.amount);
+  const words = amountInWords(o.amount ?? null);
+  return [`COD Amount: Rs. ${amt || BLANK}/-`, ...(words ? [`(${words})`] : [])];
+}
+
+/** Product / size / note under the amount: "(Kolhapuri Kurundwad, 10 no, RED)" – '' when all are empty. */
+export function codItemLine(o: LabelOrder): string {
+  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', o.note?.trim()].filter(Boolean);
+  return parts.length ? `(${parts.join(', ')})` : '';
+}
+
+/** "From" block of a COD label: the sender from the message, or the shop when none was given. */
+export function codFromLines(o: LabelOrder, shop: LabelShop): string[] {
+  const name = o.sender_name?.trim();
+  const address = (o.sender_address ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!name && !address.length) return fromLines(shop);
+  const mob = o.sender_mobile?.trim();
+  return [...(name ? [name] : []), ...address, ...(mob ? [`Mob. ${mob}`] : [])];
 }
 
 /** Two orders per A4 page (top half + bottom half). */

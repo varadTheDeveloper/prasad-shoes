@@ -34,7 +34,7 @@ function order(extra: Record<string, unknown> = {}) {
     address: 'Vill Tekumatla, Jaipur mandal',
     pincode: pin(),
     mobile1: m,
-    payment_type: 'COD',
+    payment_type: 'PREPAID',
     amount: 1299,
     size: '10',
     note: 'RED KURUNDWAD',
@@ -123,12 +123,66 @@ test('amount is optional: blank, null or missing all save, and stay blank', { sk
   assert.equal(ed.data.amount, null);
 });
 
-test('COD is switched off: every new order is saved as PREPAID', { skip }, async () => {
-  const r = await call('POST', '/orders', order({ payment_type: 'COD', amount: null }), staff);
-  assert.equal(r.status, 201, JSON.stringify(r.data));
-  assert.equal(r.data.payment_type, 'PREPAID');
+test('shipment type: missing = PREPAID; Prepaid keeps no COD details', { skip }, async () => {
   const d = await call('POST', '/orders', order({ payment_type: undefined }), staff);
+  assert.equal(d.status, 201, JSON.stringify(d.data));
   assert.equal(d.data.payment_type, 'PREPAID');
+  const p = await call('POST', '/orders', order({ booking_date: '2026-11-02', weight: '800 g', sender_name: 'X', sender_mobile: '9000000001' }), staff);
+  assert.equal(p.status, 201, JSON.stringify(p.data));
+  for (const k of ['booking_date', 'weight', 'sender_name', 'sender_address', 'sender_mobile']) assert.equal(p.data[k], null, k);
+});
+
+test('COD: needs an amount; saves booking date, weight and sender', { skip }, async () => {
+  const none = await call('POST', '/orders', order({ payment_type: 'COD', amount: null }), staff);
+  assert.equal(none.status, 400);
+  assert.ok(none.data.error.fields.amount);
+  const badDate = await call('POST', '/orders', order({ payment_type: 'COD', booking_date: '2026-02-30' }), staff);
+  assert.equal(badDate.status, 400);
+  assert.ok(badDate.data.error.fields.booking_date);
+  const badMob = await call('POST', '/orders', order({ payment_type: 'COD', sender_mobile: '12345' }), staff);
+  assert.equal(badMob.status, 400);
+  assert.ok(badMob.data.error.fields.sender_mobile);
+
+  const r = await call(
+    'POST',
+    '/orders',
+    order({
+      payment_type: 'COD',
+      amount: 1299,
+      booking_date: '2026-11-02',
+      weight: '800 g',
+      sender_name: 'Amit Traders',
+      sender_address: 'Kothrud, Pune - 411038',
+      sender_mobile: '+91 90000 00001',
+    }),
+    staff,
+  );
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.payment_type, 'COD');
+  assert.equal(r.data.amount, 1299);
+  assert.equal(r.data.booking_date, '2026-11-02');
+  assert.equal(r.data.weight, '800 g');
+  assert.equal(r.data.sender_name, 'Amit Traders');
+  assert.equal(r.data.sender_mobile, '9000000001');
+
+  // COD -> Prepaid clears the COD details; Prepaid -> COD keeps the amount
+  const pre = await call('PUT', `/orders/${r.data.id}`, { payment_type: 'PREPAID' }, staff);
+  assert.equal(pre.status, 200, JSON.stringify(pre.data));
+  assert.equal(pre.data.payment_type, 'PREPAID');
+  assert.equal(pre.data.booking_date, null);
+  assert.equal(pre.data.sender_name, null);
+  const back = await call('PUT', `/orders/${r.data.id}`, { payment_type: 'COD', weight: '1 kg' }, staff);
+  assert.equal(back.status, 200, JSON.stringify(back.data));
+  assert.equal(back.data.payment_type, 'COD');
+  assert.equal(back.data.weight, '1 kg');
+  // COD amount cannot be cleared
+  const clear = await call('PUT', `/orders/${r.data.id}`, { amount: null }, staff);
+  assert.equal(clear.status, 400);
+
+  // Prepaid and COD print together in one Word file (2 labels per page)
+  const doc = await call('POST', '/labels', { orderIds: [r.data.id, (await call('POST', '/orders', order(), staff)).data.id], markPrinted: false }, owner);
+  assert.equal(doc.status, 200);
+  assert.equal(doc.headers.get('x-page-count'), '1');
 });
 
 test('product name empty or filled both save', { skip }, async () => {

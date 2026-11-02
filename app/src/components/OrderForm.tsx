@@ -1,9 +1,13 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Field, Input, Row, Segmented } from './ui';
+import { DateField } from './DateField';
 import type { Order, OrderInput, PaymentType } from '@shared/types';
 import type { LabelOrder } from '@shared/label';
 import { normaliseMobile } from '@shared/parser';
 import { DEFAULT_PAYMENT, FEATURES, effectivePayment } from '@shared/features';
+import { COD_FIXED, isIsoDate } from '@shared/cod';
+import { todayISO } from '@/lib/format';
+import { C } from '@/lib/theme';
 
 export interface FormState {
   ship_name: string;
@@ -19,10 +23,18 @@ export interface FormState {
   note: string;
   payment_type: PaymentType;
   amount: string;
+  // COD only
+  booking_date: string; // 'YYYY-MM-DD'
+  weight: string;
+  sender_name: string;
+  sender_address: string;
+  sender_mobile: string;
 }
 export type FormKey = keyof FormState;
 
-export const emptyForm = (): FormState => ({
+export const COD_KEYS = ['booking_date', 'weight', 'sender_name', 'sender_address', 'sender_mobile'] as const;
+
+export const emptyForm = (type: PaymentType = DEFAULT_PAYMENT): FormState => ({
   ship_name: '',
   address: '',
   landmark: '',
@@ -34,9 +46,21 @@ export const emptyForm = (): FormState => ({
   product_name: '',
   size: '',
   note: '',
-  payment_type: DEFAULT_PAYMENT,
+  payment_type: effectivePayment(type),
   amount: '',
+  booking_date: effectivePayment(type) === 'COD' ? todayISO() : '',
+  weight: '',
+  sender_name: '',
+  sender_address: '',
+  sender_mobile: '',
 });
+
+/** Prepaid <-> COD on an existing form: Prepaid keeps no COD details; COD gets today's booking date. */
+export function withType(f: FormState, type: PaymentType): FormState {
+  const t = effectivePayment(type);
+  if (t === 'PREPAID') return { ...f, payment_type: t, booking_date: '', weight: '', sender_name: '', sender_address: '', sender_mobile: '' };
+  return { ...f, payment_type: t, booking_date: f.booking_date || todayISO() };
+}
 
 export function formFromOrder(o: Order): FormState {
   return {
@@ -53,6 +77,26 @@ export function formFromOrder(o: Order): FormState {
     note: o.note ?? '',
     payment_type: effectivePayment(o.payment_type),
     amount: o.amount === undefined || o.amount === null ? '' : String(o.amount),
+    booking_date: o.booking_date ?? '',
+    weight: o.weight ?? '',
+    sender_name: o.sender_name ?? '',
+    sender_address: o.sender_address ?? '',
+    sender_mobile: o.sender_mobile ?? '',
+  };
+}
+
+/** COD details for saving / printing (null for Prepaid). */
+function codPart(f: FormState, mobile: (v: string) => string | null) {
+  const n = (v: string) => (v.trim() ? v.trim() : null);
+  if (effectivePayment(f.payment_type) !== 'COD') {
+    return { booking_date: null, weight: null, sender_name: null, sender_address: null, sender_mobile: null };
+  }
+  return {
+    booking_date: n(f.booking_date),
+    weight: n(f.weight),
+    sender_name: n(f.sender_name),
+    sender_address: n(f.sender_address),
+    sender_mobile: mobile(f.sender_mobile),
   };
 }
 
@@ -71,6 +115,7 @@ export function toInput(f: FormState, showAmount: boolean): OrderInput {
     size: n(f.size),
     note: n(f.note),
     payment_type: effectivePayment(f.payment_type),
+    ...codPart(f, (v) => (v.trim() ? v.trim() : null)),
   };
   if (showAmount) out.amount = f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null;
   return out;
@@ -93,6 +138,7 @@ export function formToLabel(f: FormState): LabelOrder {
     note: n(f.note),
     payment_type: effectivePayment(f.payment_type),
     amount: f.amount.trim() ? Number(f.amount.replace(/[,₹\s]/g, '')) : null,
+    ...codPart(f, (v) => (v.trim() ? normaliseMobile(v) || v.trim() : null)),
   };
 }
 
@@ -113,6 +159,13 @@ export function validate(f: FormState, showAmount: boolean): Record<string, stri
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
   if (showAmount && amt && !(Number(amt) >= 0)) e.amount = 'Enter a number, e.g. 1299';
   if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = 'Enter COD amount';
+  if (f.payment_type === 'COD') {
+    if (f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = 'Pick a booking date';
+    if (f.sender_mobile.trim()) {
+      const sm = f.sender_mobile.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+      if (!/^\d{10}$/.test(sm)) e.sender_mobile = 'Enter 10 digits';
+    }
+  }
   return e;
 }
 
@@ -123,6 +176,7 @@ export function OrderForm({
   highlight = [],
   showAmount,
   twoCol,
+  typePicker,
 }: {
   value: FormState;
   onChange: (key: FormKey, v: string) => void;
@@ -130,6 +184,8 @@ export function OrderForm({
   highlight?: string[];
   showAmount: boolean;
   twoCol?: boolean;
+  /** Show Prepaid / COD buttons inside the form (order edit screen; the paste screen has its own). */
+  typePicker?: boolean;
 }) {
   const f = value;
   const hl = (k: FormKey) => highlight.includes(k);
@@ -180,26 +236,51 @@ export function OrderForm({
           {input('note', { placeholder: 'e.g. RED' })}
         </Field>
       </View>
-      {FEATURES.cod ? (
-        <Row>
-          <Field label="Payment" style={half}>
-            <Segmented
-              options={[
-                { value: 'COD', label: 'COD' },
-                { value: 'PREPAID', label: 'Prepaid' },
-              ]}
-              value={f.payment_type}
-              onChange={(v) => onChange('payment_type', v)}
-            />
-          </Field>
-          {showAmount ? (
-            <Field label="Amount (₹)" required={f.payment_type === 'COD'} error={errors.amount} style={half}>
-              {input('amount', { keyboardType: 'decimal-pad', placeholder: f.payment_type === 'COD' ? '1299' : 'Optional' })}
+      {FEATURES.cod && typePicker ? (
+        <Field label="Shipment type">
+          <TypeButtons value={f.payment_type} onChange={(v) => onChange('payment_type', v)} />
+        </Field>
+      ) : null}
+      {f.payment_type === 'COD' ? (
+        <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12, marginTop: 2 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>COD details</Text>
+          <Text style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID {COD_FIXED.contractId}
+          </Text>
+          <Row>
+            {showAmount ? (
+              <Field label="COD amount (₹)" required error={errors.amount} style={half}>
+                {input('amount', { keyboardType: 'decimal-pad', placeholder: '1299' })}
+              </Field>
+            ) : (
+              <View style={half} />
+            )}
+            <Field label="Weight" error={errors.weight} style={half}>
+              {input('weight', { placeholder: 'e.g. 800 g' })}
             </Field>
-          ) : (
-            <View style={half} />
-          )}
-        </Row>
+          </Row>
+          <Field label="Booking date" error={errors.booking_date}>
+            <View style={hl('booking_date') ? { borderRadius: 8, backgroundColor: C.tint } : undefined}>
+              <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder="Pick date" />
+            </View>
+          </Field>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginTop: 4, marginBottom: 6 }}>From (sender)</Text>
+          <Row>
+            <Field label="Sender name" error={errors.sender_name} style={half}>
+              {input('sender_name', { placeholder: 'Empty = shop details', autoCapitalize: 'words' })}
+            </Field>
+            <Field label="Sender mobile" error={errors.sender_mobile} style={half}>
+              {input('sender_mobile', { keyboardType: 'phone-pad', placeholder: 'Optional', maxLength: 14 })}
+            </Field>
+          </Row>
+          <Field label="Sender address" error={errors.sender_address}>
+            {input('sender_address', {
+              multiline: true,
+              placeholder: 'Leave empty to print the shop address',
+              style: { minHeight: 56, paddingTop: 12, textAlignVertical: 'top' },
+            })}
+          </Field>
+        </View>
       ) : showAmount ? (
         <Row>
           <Field label="Amount (₹, optional)" error={errors.amount} style={half}>
@@ -209,5 +290,19 @@ export function OrderForm({
         </Row>
       ) : null}
     </View>
+  );
+}
+
+/** The two shipment-type buttons: Prepaid | COD. */
+export function TypeButtons({ value, onChange }: { value: PaymentType; onChange: (v: PaymentType) => void }) {
+  return (
+    <Segmented
+      options={[
+        { value: 'PREPAID', label: 'Prepaid' },
+        { value: 'COD', label: 'COD' },
+      ]}
+      value={value}
+      onChange={onChange}
+    />
   );
 }

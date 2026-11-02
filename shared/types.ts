@@ -26,6 +26,12 @@ export interface Order {
   note: string | null;
   payment_type: PaymentType;
   amount?: number | null; // null = left blank; missing when the user lacks ORDER_VIEW_AMOUNT
+  // COD only (null for Prepaid orders and for orders saved before COD was added)
+  booking_date: string | null; // 'YYYY-MM-DD'
+  weight: string | null; // as written, e.g. '800 g'
+  sender_name: string | null; // empty = the shop's own details print as "From"
+  sender_address: string | null;
+  sender_mobile: string | null;
   is_printed: boolean;
   printed_at: string | null;
   raw_message?: string;
@@ -51,6 +57,11 @@ export interface OrderInput {
   note?: string | null;
   payment_type: PaymentType;
   amount?: number | null;
+  booking_date?: string | null;
+  weight?: string | null;
+  sender_name?: string | null;
+  sender_address?: string | null;
+  sender_mobile?: string | null;
 }
 
 export interface DuplicateMatch {

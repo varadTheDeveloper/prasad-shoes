@@ -77,7 +77,8 @@ Server-only changes do not need a new APK.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.
 - **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):
   `POST /api/labels/email {orderIds, client_request_id}` → same `buildLabelsDocx` file as Download Word, one email to
-  `OWNER_EMAIL` (server/.env only; the app never sends a recipient) via nodemailer SMTP (`services/mailer.ts`,
-  `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`). Does not mark orders printed. One send at a time per user (advisory lock),
-  same request id = no second email, 10 per hour (audit_logs `LABEL_EMAIL`). Never log customer details.
-  Tests: `test/email.test.ts` with a fake mail server (`SMTP_TEST_PORT`).
+  `OWNER_EMAIL` (server/.env only; the app never sends a recipient) via the **Resend** HTTP API with built-in fetch, no
+  package (`services/mailer.ts`; `RESEND_API_KEY`, `EMAIL_FROM` on a Resend-verified domain). Does not mark orders printed.
+  One send at a time per user (advisory lock), same request id = no second email (also Resend Idempotency-Key),
+  10 per hour (audit_logs `LABEL_EMAIL`). Never log customer details.
+  Tests: `test/email.test.ts` with a fake Resend server (`RESEND_TEST_PORT`; API runs with `RESEND_API_URL=http://127.0.0.1:<port>`).

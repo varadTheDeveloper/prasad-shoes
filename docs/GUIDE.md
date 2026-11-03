@@ -212,19 +212,17 @@ Tests: `cd server` → `npm test` (parser tests). Full API tests: start the API,
 
 ## Email setup (Send to Owner)
 
-The owner's address and the sending account live only in `server/.env` on the server – never in the app.
+Emails are sent with **Resend** (resend.com). The owner's address, the API key and the sender address live only in
+`server/.env` on the server – never in the app.
 
-1. Pick the Gmail account that sends (it can be the owner's own, jodakolhapuri@gmail.com).
-   Google Account → Security → turn on **2-Step Verification** → **App passwords** → create one (name: Prasad Shoes).
-2. On the server: `nano /opt/prasad-shoes/server/.env` and add:
+1. Resend → **Domains** → add a domain you own (e.g. `thegrowthstep.com`) → add the DNS records it shows
+   (Route 53 or wherever the domain is) → wait for **Verified**.
+2. Resend → **API Keys** → create a key with **Sending access**. Copy it (starts with `re_`).
+3. On the server: `nano /opt/prasad-shoes/server/.env` and add:
    ```
    OWNER_EMAIL=jodakolhapuri@gmail.com
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=465
-   SMTP_USER=<sending gmail address>
-   SMTP_PASS=<the 16-letter app password, no spaces>
-   EMAIL_FROM="Prasad Shoes <sending gmail address>"
+   RESEND_API_KEY=re_...your key...
+   EMAIL_FROM="Prasad Shoes <orders@your-verified-domain.com>"
    ```
-3. `pm2 restart prasad-api --update-env`.
-4. To send to someone else later, change only `OWNER_EMAIL` and restart – no code change, no new APK.
-
+4. `pm2 restart prasad-api --update-env`.
+5. To send to someone else later, change only `OWNER_EMAIL` and restart – no code change, no new APK.

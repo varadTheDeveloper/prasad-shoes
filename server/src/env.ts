@@ -19,10 +19,8 @@ export const env = {
   /** "Send to Owner" email (optional: without it the button answers "Email is not set up"). Server only. */
   mail: {
     ownerEmail: (process.env.OWNER_EMAIL ?? '').trim(),
-    host: (process.env.SMTP_HOST ?? '').trim(),
-    port: Number(process.env.SMTP_PORT || 465),
-    user: (process.env.SMTP_USER ?? '').trim(),
-    pass: process.env.SMTP_PASS ?? '',
+    resendKey: (process.env.RESEND_API_KEY ?? '').trim(),
+    resendUrl: (process.env.RESEND_API_URL || 'https://api.resend.com').replace(/\/+$/, ''),
     from: (process.env.EMAIL_FROM ?? '').trim(),
   },
 };

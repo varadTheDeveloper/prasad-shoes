@@ -1,79 +1,52 @@
-// "Send to Owner" end-to-end, against a running API and a FAKE mail server started by this test.
-// Nothing is really emailed. Run (the API must use the fake mail server):
-//   SMTP_HOST=127.0.0.1 SMTP_PORT=2525 OWNER_EMAIL=owner@test.local EMAIL_FROM=shop@test.local  (in the API's .env)
-//   API_URL=http://localhost:3000 OWNER_MOBILE=... OWNER_PASSWORD=... SMTP_TEST_PORT=2525 TEST_OWNER_EMAIL=owner@test.local npm test
-// Skipped automatically when API_URL or SMTP_TEST_PORT is not set.
+// "Send to Owner" end-to-end, against a running API and a FAKE Resend server started by this test.
+// Nothing is really emailed. Run (the API must use the fake Resend server, in the API's .env):
+//   OWNER_EMAIL=owner@test.local RESEND_API_KEY=re_test EMAIL_FROM="Shop <shop@test.local>" RESEND_API_URL=http://127.0.0.1:2525
+//   API_URL=http://localhost:3000 OWNER_MOBILE=... OWNER_PASSWORD=... RESEND_TEST_PORT=2525 TEST_OWNER_EMAIL=owner@test.local npm test
+// Skipped automatically when API_URL or RESEND_TEST_PORT is not set.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createServer, type Server, type Socket } from 'node:net';
+import { createServer, type Server } from 'node:http';
 import { inflateRawSync } from 'node:zlib';
 
 const API = process.env.API_URL;
-const SMTP_PORT = Number(process.env.SMTP_TEST_PORT || 0);
+const RESEND_PORT = Number(process.env.RESEND_TEST_PORT || 0);
 const OWNER_EMAIL = process.env.TEST_OWNER_EMAIL ?? 'owner@test.local';
-const skip = !API || !SMTP_PORT;
+const skip = !API || !RESEND_PORT;
 
-// ------------------------------------------------------------------ fake mail server
+// ------------------------------------------------------------------ fake Resend API (POST /emails)
 interface Mail {
+  auth: string;
+  idempotencyKey: string;
   from: string;
   to: string[];
-  data: string;
+  subject: string;
+  text: string;
+  attachments: { filename: string; content: string }[];
 }
 const inbox: Mail[] = [];
 let mode: 'ok' | 'fail' = 'ok';
 let delayMs = 0;
-let smtp: Server;
+let fake: Server;
 
-function startSmtp(port: number) {
+function startResend(port: number) {
   return new Promise<void>((resolve) => {
-    smtp = createServer((sock: Socket) => {
-      let buf = '';
-      let inData = false;
-      let cur: Mail = { from: '', to: [], data: '' };
-      const say = (l: string) => sock.write(l + '\r\n');
-      say('220 fake ESMTP');
-      sock.on('data', async (chunk) => {
-        buf += chunk.toString('latin1');
-        while (true) {
-          if (inData) {
-            const end = buf.indexOf('\r\n.\r\n');
-            if (end < 0) return;
-            cur.data = buf.slice(0, end);
-            buf = buf.slice(end + 5);
-            inData = false;
-            if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
-            if (mode === 'fail') say('554 5.0.0 Rejected for test');
-            else {
-              inbox.push(cur);
-              say('250 2.0.0 queued');
-            }
-            cur = { from: '', to: [], data: '' };
-            continue;
-          }
-          const nl = buf.indexOf('\r\n');
-          if (nl < 0) return;
-          const line = buf.slice(0, nl);
-          buf = buf.slice(nl + 2);
-          const cmd = line.slice(0, 4).toUpperCase();
-          if (cmd === 'EHLO' || cmd === 'HELO') say('250 fake');
-          else if (cmd === 'MAIL') {
-            cur.from = line;
-            say('250 ok');
-          } else if (cmd === 'RCPT') {
-            cur.to.push(line.match(/<([^>]+)>/)?.[1] ?? '');
-            say('250 ok');
-          } else if (cmd === 'DATA') {
-            inData = true;
-            say('354 go');
-          } else if (cmd === 'QUIT') {
-            say('221 bye');
-            sock.end();
-          } else if (cmd === 'RSET' || cmd === 'NOOP') say('250 ok');
-          else say('250 ok');
-        }
+    fake = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', async () => {
+        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method !== 'POST' || req.url !== '/emails') return res.writeHead(404).end('{}');
+        if (mode === 'fail') return res.writeHead(500).end(JSON.stringify({ name: 'application_error', message: 'Test failure' }));
+        const b = JSON.parse(body);
+        inbox.push({
+          auth: String(req.headers.authorization ?? ''),
+          idempotencyKey: String(req.headers['idempotency-key'] ?? ''),
+          ...b,
+        });
+        res.writeHead(200).end(JSON.stringify({ id: randomUUID() }));
       });
-      sock.on('error', () => {});
     }).listen(port, '127.0.0.1', () => resolve());
   });
 }
@@ -90,13 +63,10 @@ async function call(method: string, path: string, body?: unknown, token?: string
   return { status: res.status, data: data as any };
 }
 
-/** The attachment of a received mail (base64 MIME part) as bytes, plus its file name. */
+/** The attachment of a received mail as bytes, plus its file name. */
 function attachment(m: Mail): { name: string; bytes: Buffer } {
-  const part = m.data.split(/\r\n--/).find((p) => /Content-Disposition:\s*attachment/i.test(p));
-  assert.ok(part, 'mail has an attachment');
-  const name = part!.match(/filename="?([^";\r\n]+)"?/i)?.[1] ?? '';
-  const body = part!.split(/\r\n\r\n/).slice(1).join('').replace(/\s+/g, '');
-  return { name, bytes: Buffer.from(body, 'base64') };
+  assert.equal(m.attachments.length, 1, 'one attachment');
+  return { name: m.attachments[0].filename, bytes: Buffer.from(m.attachments[0].content, 'base64') };
 }
 
 /** One file from a .docx (zip), e.g. 'word/document.xml'. */
@@ -152,7 +122,7 @@ async function newOrder(name: string, extra: Record<string, unknown> = {}) {
 
 before(async () => {
   if (skip) return;
-  await startSmtp(SMTP_PORT);
+  await startResend(RESEND_PORT);
   const r = await call('POST', '/auth/login', { mobile: process.env.OWNER_MOBILE, password: process.env.OWNER_PASSWORD });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   owner = r.data.token;
@@ -165,7 +135,7 @@ before(async () => {
   staff = (await call('POST', '/auth/login', { mobile, password: 'staff123' })).data.token;
   ids.push(await newOrder('Mail One'), await newOrder('Mail Two', { payment_type: 'COD', amount: 1999, size: '8', note: 'pona sanke awaj' }), await newOrder('Mail Three'));
 });
-after(() => smtp?.close());
+after(() => fake?.close());
 
 const send = (orderIds: number[], token = owner, extra: Record<string, unknown> = {}) =>
   call('POST', '/labels/email', { orderIds, client_request_id: randomUUID(), ...extra }, token);
@@ -199,8 +169,13 @@ test('one order: one email to OWNER_EMAIL with the same Word file as Download Wo
   assert.equal(inbox.length, before + 1);
   const m = inbox.at(-1)!;
   assert.deepEqual(m.to, [OWNER_EMAIL]);
-  assert.match(m.data, /Subject: Customer Orders - \d{2}-\d{2}-\d{4}/);
-  assert.match(m.data, /Total Orders: 1/);
+  assert.match(m.auth, /^Bearer re_/, 'API key sent by the server');
+  assert.ok(m.idempotencyKey, 'idempotency key sent');
+  assert.match(m.subject, /^Customer Orders - \d{2}-\d{2}-\d{4}$/);
+  assert.match(m.text, /^Hello,\n\nPlease find attached the selected customer orders in Word format\./);
+  assert.match(m.text, /Total Orders: 1/);
+  assert.match(m.text, /Generated Date: \d{2}-\d{2}-\d{4}/);
+  assert.match(m.text, /Regards,\nPrasad Shoes$/);
   const a = attachment(m);
   assert.match(a.name, /^Prasad-Shoes-Orders-\d{4}-\d{2}-\d{2}\.docx$/);
   assert.equal(a.bytes.subarray(0, 2).toString(), 'PK', 'a real .docx (zip) file');
@@ -219,7 +194,7 @@ test('several orders (Prepaid + COD): ONE email, ONE file with all of them', { s
   for (const n of ['Mail One', 'Mail Two', 'Mail Three', 'COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY', 'COD 1999 (Size 8 pona sanke awaj)']) {
     assert.ok(xml.includes(n), `${n} is in the file`);
   }
-  assert.match(inbox.at(-1)!.data, /Total Orders: 3/);
+  assert.match(inbox.at(-1)!.text, /Total Orders: 3/);
   const dl = await call('POST', '/labels', { orderIds: ids, markPrinted: false }, owner);
   assert.equal(xml, unzip(dl.data, 'word/document.xml'));
 });
@@ -246,7 +221,7 @@ test('two sends at the same moment: the second is refused while the first is sen
   assert.equal(inbox.length, before + 1);
 });
 
-test('mail provider failure: clear error, nothing reported as sent', { skip }, async () => {
+test('Resend failure: clear error, nothing reported as sent', { skip }, async () => {
   mode = 'fail';
   const r = await send([ids[0]]);
   mode = 'ok';

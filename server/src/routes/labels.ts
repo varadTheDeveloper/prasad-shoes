@@ -175,11 +175,11 @@ r.post(
 
       let sent: { to: string };
       try {
-        sent = await sendToOwner({ subject: `Customer Orders - ${day}`, text, fileName, file });
+        sent = await sendToOwner({ subject: `Customer Orders - ${day}`, text, fileName, file, idempotencyKey: client_request_id });
       } catch (e) {
         // No customer details in the log: only what went wrong with the email provider.
         const err = e as { code?: string; responseCode?: number; message?: string };
-        console.error(`[label-email] send failed: ${err.code ?? ''} ${err.responseCode ?? ''} ${String(err.message ?? '').slice(0, 200)}`);
+        console.error(`[label-email] Resend failed: ${err.responseCode ?? ''} ${err.code ?? ''} ${String(err.message ?? '').slice(0, 200)}`);
         throw new HttpError(502, 'EMAIL_FAILED', 'Unable to send email. Please try again.');
       }
       await audit(c, u.id, 'LABEL_EMAIL', 'orders', null, null, {

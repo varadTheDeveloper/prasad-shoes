@@ -77,7 +77,7 @@ Server-only changes do not need a new APK.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.
 - **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):
   `POST /api/labels/email {orderIds, client_request_id}` → same `buildLabelsDocx` file as Download Word, one email to
-  `OWNER_EMAIL` (server/.env only; the app never sends a recipient) via the **Resend** HTTP API with built-in fetch, no
+  `OWNER_EMAIL` (comma-separated list allowed; server/.env only; the app never sends a recipient) via the **Resend** HTTP API with built-in fetch, no
   package (`services/mailer.ts`; `RESEND_API_KEY`, `EMAIL_FROM` on a Resend-verified domain). Does not mark orders printed.
   One send at a time per user (advisory lock), same request id = no second email (also Resend Idempotency-Key),
   10 per hour (audit_logs `LABEL_EMAIL`). Never log customer details.

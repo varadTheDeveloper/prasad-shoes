@@ -11,7 +11,8 @@ import { inflateRawSync } from 'node:zlib';
 
 const API = process.env.API_URL;
 const RESEND_PORT = Number(process.env.RESEND_TEST_PORT || 0);
-const OWNER_EMAIL = process.env.TEST_OWNER_EMAIL ?? 'owner@test.local';
+// The API's OWNER_EMAIL (one address or a comma-separated list)
+const OWNER_EMAILS = (process.env.TEST_OWNER_EMAIL ?? 'owner@test.local').split(',').map((s) => s.trim());
 const skip = !API || !RESEND_PORT;
 
 // ------------------------------------------------------------------ fake Resend API (POST /emails)
@@ -165,10 +166,10 @@ test('one order: one email to OWNER_EMAIL with the same Word file as Download Wo
   const before = inbox.length;
   const r = await send([ids[0]], owner, { to: 'someone-else@example.com', recipient: 'x@example.com' }); // a sent address is ignored
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.to, OWNER_EMAIL);
+  assert.equal(r.data.to, OWNER_EMAILS.join(', '));
   assert.equal(inbox.length, before + 1);
   const m = inbox.at(-1)!;
-  assert.deepEqual(m.to, [OWNER_EMAIL]);
+  assert.deepEqual(m.to, OWNER_EMAILS, 'exactly the OWNER_EMAIL address(es), nothing from the app');
   assert.match(m.auth, /^Bearer re_/, 'API key sent by the server');
   assert.ok(m.idempotencyKey, 'idempotency key sent');
   assert.match(m.subject, /^Customer Orders - \d{2}-\d{2}-\d{4}$/);

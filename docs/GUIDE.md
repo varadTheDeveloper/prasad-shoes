@@ -225,4 +225,5 @@ Emails are sent with **Resend** (resend.com). The owner's address, the API key a
    EMAIL_FROM="Prasad Shoes <orders@your-verified-domain.com>"
    ```
 4. `pm2 restart prasad-api --update-env`.
-5. To send to someone else later, change only `OWNER_EMAIL` and restart – no code change, no new APK.
+5. More than one recipient: separate them with commas, e.g. `OWNER_EMAIL=jodakolhapuri@gmail.com,varadmodhekar101@gmail.com`.
+   To change or remove a recipient later, edit only `OWNER_EMAIL` and restart – no code change, no new APK.

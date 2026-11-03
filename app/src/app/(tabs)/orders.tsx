@@ -367,14 +367,19 @@ export default function Orders() {
       ) : null}
       {canPrint && selected.size > 0 && !table ? (
         <View style={st.footer}>
-          <View style={[st.footerCard, { maxWidth: wide ? 1100 : 720 }]}>
-            <View style={{ flexShrink: 1, marginRight: 10 }}>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: C.text }}>{selected.size} selected</Text>
+          {/* Phone + owner (2 buttons): count on top, the two buttons side by side below.
+              Otherwise one row: count left, button(s) right. The count never shrinks. */}
+          <View style={[st.footerCard, { maxWidth: wide ? 1100 : 720 }, admin && !wide && st.footerStacked]}>
+            <View style={admin && !wide ? st.footerCountRow : st.footerCount}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: C.text }} numberOfLines={1}>
+                {selected.size} selected
+              </Text>
               <Muted>
+                {admin && !wide ? '· ' : ''}
                 {pagesFor(selected.size)} A4 page{pagesFor(selected.size) === 1 ? '' : 's'}
               </Muted>
             </View>
-            <View style={st.footerButtons}>
+            <View style={[st.footerButtons, admin && !wide && { justifyContent: 'space-between' }]}>
               {admin ? (
                 <Button
                   kind="secondary"
@@ -382,10 +387,15 @@ export default function Orders() {
                   onPress={sendToOwner}
                   loading={sending}
                   disabled={sending || selected.size === 0}
-                  style={{ paddingHorizontal: 16 }}
+                  style={wide ? { paddingHorizontal: 16 } : { flex: 1, paddingHorizontal: 8 }}
                 />
               ) : null}
-              <Button title="Download Word" onPress={download} disabled={sending} style={{ paddingHorizontal: 22 }} />
+              <Button
+                title="Download Word"
+                onPress={download}
+                disabled={sending}
+                style={admin && !wide ? { flex: 1, paddingHorizontal: 8 } : { paddingHorizontal: 22 }}
+              />
             </View>
           </View>
         </View>
@@ -427,7 +437,10 @@ const st = StyleSheet.create({
   flag: { fontSize: 11, fontWeight: '700', color: C.danger },
   meta: { fontSize: 13, color: C.muted, marginTop: 3, marginLeft: 16 },
   footer: { padding: 12, backgroundColor: C.ground },
-  footerButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10 },
+  footerButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  footerCount: { flexShrink: 0, marginRight: 10 },
+  footerCountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  footerStacked: { flexDirection: 'column', alignItems: 'stretch', gap: 10 },
   footerCard: {
     width: '100%',
     alignSelf: 'center',

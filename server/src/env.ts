@@ -16,4 +16,11 @@ export const env = {
   /** Comma-separated origins allowed to call the API from a browser (only needed in development). */
   corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   isProd: process.env.NODE_ENV === 'production',
+  /** "Send to Owner" email (optional: without it the button answers "Email is not set up"). Server only. */
+  mail: {
+    ownerEmail: (process.env.OWNER_EMAIL ?? '').trim(),
+    resendKey: (process.env.RESEND_API_KEY ?? '').trim(),
+    resendUrl: (process.env.RESEND_API_URL || 'https://api.resend.com').replace(/\/+$/, ''),
+    from: (process.env.EMAIL_FROM ?? '').trim(),
+  },
 };

@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
 import { api, apiFile, ApiError } from '@/lib/api';
 import { saveFile } from '@/lib/download';
 import { getPref, setPref } from '@/lib/storage';
 import { OrdersTable } from '@/components/OrdersTable';
 import { useIsAdmin, usePermission } from '@/lib/auth';
-import { Button, Checkbox, Chip, Header, Input, Loading, Muted, useWide } from '@/components/ui';
+import { Banner, Button, Checkbox, Chip, Header, Input, Loading, Muted, useWide } from '@/components/ui';
 import { DateField } from '@/components/DateField';
 import { payText, shiftISO, shortDateTime, todayISO } from '@/lib/format';
 import { setSelection } from '@/lib/selection';
@@ -58,6 +59,16 @@ export default function Orders() {
     setPref('orders_view', v);
   };
   const table = admin && view === 'table';
+
+  // Owner only: "Send to Owner" emails the same Word file to the owner's address (set on the server).
+  const qc = useQueryClient();
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<{ kind: 'ok' | 'danger'; text: string } | null>(null);
+  // One id per send: a double tap / retry after a lost answer never emails twice. New id when the selection changes.
+  const sendId = useRef(Crypto.randomUUID());
+  useEffect(() => {
+    sendId.current = Crypto.randomUUID();
+  }, [selected]);
 
   // Home buttons open this screen with a preset: today, not printed, all ticked.
   useEffect(() => {
@@ -150,6 +161,28 @@ export default function Orders() {
     const ids = [...selected].sort((a, b) => b - a);
     setSelection(ids);
     router.push({ pathname: '/labels', params: { n: String(ids.length) } });
+  }
+
+  async function sendToOwner() {
+    if (sending || selected.size === 0) return;
+    setSending(true);
+    setSendMsg(null);
+    try {
+      const ids = [...selected].sort((a, b) => b - a); // same order as Download Word
+      // Up to 2 minutes: a big Word file + the email provider can be slow. A retry with the same id never sends twice.
+      const r = await api<{ to: string; orders: number }>('POST', '/labels/email', { orderIds: ids, client_request_id: sendId.current }, 120_000);
+      setSendMsg({ kind: 'ok', text: `Orders successfully sent to ${r.to}` });
+      setSelected(new Set()); // cleared only after the email was accepted
+      setAllIds(null);
+      qc.invalidateQueries({ queryKey: ['batches'] });
+    } catch (e) {
+      const ae = e as ApiError;
+      // Clear reasons are shown as they are; anything else gets the plain retry message. Selection is kept.
+      const keep = ['BUSY', 'RATE_LIMITED', 'EMAIL_NOT_SET_UP', 'FORBIDDEN', 'VALIDATION'];
+      setSendMsg({ kind: 'danger', text: keep.includes(ae.code) ? ae.message : 'Unable to send email. Please try again.' });
+    } finally {
+      setSending(false);
+    }
   }
 
   const statusChips = !deleted ? (
@@ -323,16 +356,37 @@ export default function Orders() {
         refreshing={list.isRefetching}
       />
       )}
+      {sendMsg && !table && (selected.size === 0 || sendMsg.kind === 'danger') ? (
+        <View style={[st.footer, { paddingBottom: selected.size > 0 && canPrint ? 0 : 12 }]}>
+          <View style={{ width: '100%', maxWidth: wide ? 1100 : 720, alignSelf: 'center' }}>
+            <Pressable onPress={() => setSendMsg(null)}>
+              <Banner kind={sendMsg.kind} text={sendMsg.text} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       {canPrint && selected.size > 0 && !table ? (
         <View style={st.footer}>
           <View style={[st.footerCard, { maxWidth: wide ? 1100 : 720 }]}>
-            <View>
+            <View style={{ flexShrink: 1, marginRight: 10 }}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: C.text }}>{selected.size} selected</Text>
               <Muted>
                 {pagesFor(selected.size)} A4 page{pagesFor(selected.size) === 1 ? '' : 's'}
               </Muted>
             </View>
-            <Button title="Download Word" onPress={download} style={{ paddingHorizontal: 22 }} />
+            <View style={st.footerButtons}>
+              {admin ? (
+                <Button
+                  kind="secondary"
+                  title={sending ? 'Sending…' : '✉  Send to Owner'}
+                  onPress={sendToOwner}
+                  loading={sending}
+                  disabled={sending || selected.size === 0}
+                  style={{ paddingHorizontal: 16 }}
+                />
+              ) : null}
+              <Button title="Download Word" onPress={download} disabled={sending} style={{ paddingHorizontal: 22 }} />
+            </View>
           </View>
         </View>
       ) : null}
@@ -373,6 +427,7 @@ const st = StyleSheet.create({
   flag: { fontSize: 11, fontWeight: '700', color: C.danger },
   meta: { fontSize: 13, color: C.muted, marginTop: 3, marginLeft: 16 },
   footer: { padding: 12, backgroundColor: C.ground },
+  footerButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10 },
   footerCard: {
     width: '100%',
     alignSelf: 'center',

@@ -153,6 +153,8 @@ A new APK is needed only when screens change. Server changes (Step 3) reach the 
      The label prints "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" and, under the address,
      "COD 1999 (Size 8 pona sanke awaj)". From is always the shop. No barcode – the post office sticks it on.
      Switching Prepaid ↔ COD starts the form again from the same message.
+   - **Send to Owner** (owner/admin login only): on **Orders**, tick orders → **✉ Send to Owner**. The same Word file as
+     **Download Word** is emailed to the owner's address (set on the server, see "Email setup"). Orders are not marked printed.
 5. Evening: **Home → Print today's labels** → **Download Word file** → print. (Older unprinted orders: Orders screen.)
 
 The pincode list is `server/data/pincodes.json` (India Post directory from data.gov.in, 19,307 pincodes).
@@ -205,3 +207,22 @@ Tests: `cd server` → `npm test` (parser tests). Full API tests: start the API,
 | Staff forgot password | Owner → Staff → **Reset password** |
 | Owner forgot password | Run the Step 4 seed command again with a new password |
 | `ssh` says "UNPROTECTED PRIVATE KEY" | Run the two `icacls` lines from Step 1 |
+
+---
+
+## Email setup (Send to Owner)
+
+Emails are sent with **Resend** (resend.com). The owner's address, the API key and the sender address live only in
+`server/.env` on the server – never in the app.
+
+1. Resend → **Domains** → add a domain you own (e.g. `thegrowthstep.com`) → add the DNS records it shows
+   (Route 53 or wherever the domain is) → wait for **Verified**.
+2. Resend → **API Keys** → create a key with **Sending access**. Copy it (starts with `re_`).
+3. On the server: `nano /opt/prasad-shoes/server/.env` and add:
+   ```
+   OWNER_EMAIL=jodakolhapuri@gmail.com
+   RESEND_API_KEY=re_...your key...
+   EMAIL_FROM="Prasad Shoes <orders@your-verified-domain.com>"
+   ```
+4. `pm2 restart prasad-api --update-env`.
+5. To send to someone else later, change only `OWNER_EMAIL` and restart – no code change, no new APK.

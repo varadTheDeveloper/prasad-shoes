@@ -9,6 +9,10 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'LOCKED'
   | 'PASSWORD_CHANGE_REQUIRED'
+  | 'RATE_LIMITED'
+  | 'BUSY'
+  | 'EMAIL_NOT_SET_UP'
+  | 'EMAIL_FAILED'
   | 'SERVER';
 
 export class HttpError extends Error {

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, tx } from '../db';
+import { pool, q, tx } from '../db';
 import { HttpError, forbidden, h, notFound } from '../errors';
-import { can, requirePermission } from '../middleware/auth';
+import { can, requireAdmin, requirePermission } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { buildLabelsDocx } from '../services/docx';
+import { mailReady, sendToOwner } from '../services/mailer';
 import { pagesFor, type LabelOrder, type LabelShop } from '../../../shared/label';
 
 const r = Router();
@@ -86,6 +87,113 @@ r.post(
     });
 
     sendDocx(res, buf, orders.length, batchId);
+  }),
+);
+
+// ------------------------------------------------------------------ POST /api/labels/email (owner only)
+// "Send to Owner": the same Word file as Download Word, emailed to OWNER_EMAIL (server/.env).
+// The app sends only order ids + a request id – never a recipient. Orders are NOT marked printed.
+const emailBody = z.object({
+  orderIds: z.array(z.number().int().positive()).min(1, 'Select at least one order').max(5000),
+  client_request_id: z.uuid('Missing request id'),
+});
+const EMAILS_PER_HOUR = 10;
+
+/** 03-11-2026 (India time). */
+function istDay() {
+  const [y, m, d] = istDate().split('-');
+  return `${d}-${m}-${y}`;
+}
+
+r.post(
+  '/email',
+  requireAdmin, // the role comes from the database (requireAuth), never from the request
+  h(async (req, res) => {
+    const { orderIds, client_request_id } = emailBody.parse(req.body);
+    const u = req.user;
+    if (!mailReady()) throw new HttpError(503, 'EMAIL_NOT_SET_UP', 'Email is not set up on the server yet.');
+
+    // One send at a time per user (a double tap waits for nothing – it is refused), on one connection
+    // so the lock is released by the same session that took it.
+    const c = await pool.connect();
+    const lockKey = `label-email:${u.id}`;
+    const locked = (await c.query('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [lockKey])).rows[0].ok as boolean;
+    if (!locked) {
+      c.release();
+      throw new HttpError(409, 'BUSY', 'Already sending – please wait.');
+    }
+    try {
+      // The same request again (retry after a lost answer): it was already sent, do not send twice.
+      const done = await c.query(
+        `SELECT new_data FROM audit_logs WHERE action = 'LABEL_EMAIL' AND user_id = $1 AND new_data->>'request_id' = $2 LIMIT 1`,
+        [u.id, client_request_id],
+      );
+      if (done.rowCount) {
+        const d = done.rows[0].new_data;
+        return res.json({ sent: true, to: d.to, orders: d.orders, pages: d.pages, fileName: d.file, repeated: true });
+      }
+      const recent = await c.query(
+        `SELECT count(*)::int AS n FROM audit_logs WHERE action = 'LABEL_EMAIL' AND user_id = $1 AND created_at > now() - interval '1 hour'`,
+        [u.id],
+      );
+      if (recent.rows[0].n >= EMAILS_PER_HOUR) {
+        throw new HttpError(429, 'RATE_LIMITED', `At most ${EMAILS_PER_HOUR} emails per hour. Please try again later.`);
+      }
+
+      // Every selected order must exist (and not be deleted).
+      const ids = [...new Set(orderIds)];
+      const { rows } = await c.query(`SELECT ${labelCols()} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
+      const byId = new Map(rows.map((o) => [o.id, o]));
+      const missing = ids.filter((id) => !byId.has(id));
+      if (missing.length) {
+        throw new HttpError(400, 'VALIDATION', `${missing.length} of the selected orders no longer exist. Refresh the list and try again.`, {
+          missingIds: missing,
+        });
+      }
+      const orders = ids.map((id) => byId.get(id)) as LabelOrder[];
+
+      // Exactly the same Word file as Download Word.
+      const file = await buildLabelsDocx(orders, await loadShop());
+      const pages = pagesFor(orders.length);
+      const day = istDay();
+      const fileName = `Prasad-Shoes-Orders-${istDate()}.docx`;
+      const text = [
+        'Hello,',
+        '',
+        'Please find attached the selected customer orders in Word format.',
+        '',
+        'Order Summary:',
+        '',
+        `* Total Orders: ${orders.length}`,
+        `* Generated Date: ${day}`,
+        '',
+        'The attached document contains customer shipping details and order information for processing and printing.',
+        '',
+        'Regards,',
+        'Prasad Shoes',
+      ].join('\n');
+
+      let sent: { to: string };
+      try {
+        sent = await sendToOwner({ subject: `Customer Orders - ${day}`, text, fileName, file, idempotencyKey: client_request_id });
+      } catch (e) {
+        // No customer details in the log: only what went wrong with the email provider.
+        const err = e as { code?: string; responseCode?: number; message?: string };
+        console.error(`[label-email] Resend failed: ${err.responseCode ?? ''} ${err.code ?? ''} ${String(err.message ?? '').slice(0, 200)}`);
+        throw new HttpError(502, 'EMAIL_FAILED', 'Unable to send email. Please try again.');
+      }
+      await audit(c, u.id, 'LABEL_EMAIL', 'orders', null, null, {
+        request_id: client_request_id,
+        to: sent.to,
+        orders: orders.length,
+        pages,
+        file: fileName,
+      });
+      res.json({ sent: true, to: sent.to, orders: orders.length, pages, fileName });
+    } finally {
+      await c.query('SELECT pg_advisory_unlock(hashtext($1))', [lockKey]).catch(() => {});
+      c.release();
+    }
   }),
 );
 

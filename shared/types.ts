@@ -81,7 +81,19 @@ export interface ShopSettings {
 
 export interface ApiErrorBody {
   error: {
-    code: 'VALIDATION' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'DUPLICATE' | 'NOT_FOUND' | 'LOCKED' | 'PASSWORD_CHANGE_REQUIRED' | 'SERVER';
+    code:
+      | 'VALIDATION'
+      | 'UNAUTHORIZED'
+      | 'FORBIDDEN'
+      | 'DUPLICATE'
+      | 'NOT_FOUND'
+      | 'LOCKED'
+      | 'PASSWORD_CHANGE_REQUIRED'
+      | 'RATE_LIMITED'
+      | 'BUSY'
+      | 'EMAIL_NOT_SET_UP'
+      | 'EMAIL_FAILED'
+      | 'SERVER';
     message: string;
     fields?: Record<string, string>;
     matches?: DuplicateMatch[];

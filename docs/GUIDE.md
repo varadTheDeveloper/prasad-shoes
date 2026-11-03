@@ -153,6 +153,8 @@ A new APK is needed only when screens change. Server changes (Step 3) reach the 
      The label prints "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" and, under the address,
      "COD 1999 (Size 8 pona sanke awaj)". From is always the shop. No barcode – the post office sticks it on.
      Switching Prepaid ↔ COD starts the form again from the same message.
+   - **Send to Owner** (owner/admin login only): on **Orders**, tick orders → **✉ Send to Owner**. The same Word file as
+     **Download Word** is emailed to the owner's address (set on the server, see "Email setup"). Orders are not marked printed.
 5. Evening: **Home → Print today's labels** → **Download Word file** → print. (Older unprinted orders: Orders screen.)
 
 The pincode list is `server/data/pincodes.json` (India Post directory from data.gov.in, 19,307 pincodes).
@@ -205,3 +207,24 @@ Tests: `cd server` → `npm test` (parser tests). Full API tests: start the API,
 | Staff forgot password | Owner → Staff → **Reset password** |
 | Owner forgot password | Run the Step 4 seed command again with a new password |
 | `ssh` says "UNPROTECTED PRIVATE KEY" | Run the two `icacls` lines from Step 1 |
+
+---
+
+## Email setup (Send to Owner)
+
+The owner's address and the sending account live only in `server/.env` on the server – never in the app.
+
+1. Pick the Gmail account that sends (it can be the owner's own, jodakolhapuri@gmail.com).
+   Google Account → Security → turn on **2-Step Verification** → **App passwords** → create one (name: Prasad Shoes).
+2. On the server: `nano /opt/prasad-shoes/server/.env` and add:
+   ```
+   OWNER_EMAIL=jodakolhapuri@gmail.com
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_USER=<sending gmail address>
+   SMTP_PASS=<the 16-letter app password, no spaces>
+   EMAIL_FROM="Prasad Shoes <sending gmail address>"
+   ```
+3. `pm2 restart prasad-api --update-env`.
+4. To send to someone else later, change only `OWNER_EMAIL` and restart – no code change, no new APK.
+

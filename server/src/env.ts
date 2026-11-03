@@ -16,4 +16,13 @@ export const env = {
   /** Comma-separated origins allowed to call the API from a browser (only needed in development). */
   corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   isProd: process.env.NODE_ENV === 'production',
+  /** "Send to Owner" email (optional: without it the button answers "Email is not set up"). Server only. */
+  mail: {
+    ownerEmail: (process.env.OWNER_EMAIL ?? '').trim(),
+    host: (process.env.SMTP_HOST ?? '').trim(),
+    port: Number(process.env.SMTP_PORT || 465),
+    user: (process.env.SMTP_USER ?? '').trim(),
+    pass: process.env.SMTP_PASS ?? '',
+    from: (process.env.EMAIL_FROM ?? '').trim(),
+  },
 };

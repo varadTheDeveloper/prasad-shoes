@@ -75,3 +75,9 @@ Server-only changes do not need a new APK.
   bold "COD 1999 (Size 8 pona sanke awaj)" (size + note; COD reader splits "Size 8 pona sanke awaj") → From = shop, left.
   No barcode (the post office sticks it on). COD font shrinks (14→9 pt, `codSize` in docx.ts) to fit the half page.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.
+- **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):
+  `POST /api/labels/email {orderIds, client_request_id}` → same `buildLabelsDocx` file as Download Word, one email to
+  `OWNER_EMAIL` (server/.env only; the app never sends a recipient) via nodemailer SMTP (`services/mailer.ts`,
+  `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`). Does not mark orders printed. One send at a time per user (advisory lock),
+  same request id = no second email, 10 per hour (audit_logs `LABEL_EMAIL`). Never log customer details.
+  Tests: `test/email.test.ts` with a fake mail server (`SMTP_TEST_PORT`).

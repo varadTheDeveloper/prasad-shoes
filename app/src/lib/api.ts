@@ -68,8 +68,13 @@ async function request(method: string, path: string, body?: unknown, timeoutMs =
   return res;
 }
 
-export async function api<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
-  const res = await request(method, path, body);
+export async function api<T = any>(
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+  timeoutMs?: number,
+): Promise<T> {
+  const res = await request(method, path, body, timeoutMs);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

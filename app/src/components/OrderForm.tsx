@@ -170,8 +170,49 @@ export function OrderForm({
     <Input value={f[k] as string} onChangeText={(v) => onChange(k, v)} error={!!errors[k]} highlight={hl(k)} {...extra} />
   );
   const half = { flex: 1 };
+  // Order on screen (client's wish): Prepaid = Product + Size first, then the receiver.
+  // COD = COD details first, then Product + Size, then the receiver. Labels / printing are not affected.
   return (
     <View>
+      {FEATURES.cod && typePicker ? (
+        <Field label="Shipment type">
+          <TypeButtons value={f.payment_type} onChange={(v) => onChange('payment_type', v)} />
+        </Field>
+      ) : null}
+      {f.payment_type === 'COD' ? (
+        <View style={{ borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: 4, marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>COD details</Text>
+          <Text style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID{' '}
+            {COD_FIXED.contractId} · {COD_FIXED.hub}. From is always the shop. Size + Note print as “COD 1999 (Size 8 …)”.
+          </Text>
+          <Row>
+            {showAmount ? (
+              <Field label="COD amount (₹)" required error={errors.amount} style={half}>
+                {input('amount', { keyboardType: 'decimal-pad', placeholder: '1299' })}
+              </Field>
+            ) : (
+              <View style={half} />
+            )}
+            <Field label="Weight" error={errors.weight} style={half}>
+              {input('weight', { placeholder: 'e.g. 800 g' })}
+            </Field>
+          </Row>
+          <Field label="Booking date" error={errors.booking_date}>
+            <View style={hl('booking_date') ? { borderRadius: 8, backgroundColor: C.tint } : undefined}>
+              <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder="Pick date" />
+            </View>
+          </Field>
+        </View>
+      ) : null}
+      <Row>
+        <Field label="Product name (optional)" error={errors.product_name} style={half}>
+          {input('product_name', { placeholder: 'e.g. Kolhapuri Kurundwad' })}
+        </Field>
+        <Field label="Size" error={errors.size} style={half}>
+          {input('size', { placeholder: 'e.g. 9' })}
+        </Field>
+      </Row>
       <Field label="Name" required error={errors.ship_name}>
         {input('ship_name', { autoCapitalize: 'words' })}
       </Field>
@@ -201,49 +242,11 @@ export function OrderForm({
         <Field label="Mobile 2" error={errors.mobile2} style={half}>
           {input('mobile2', { keyboardType: 'phone-pad', placeholder: 'Optional', maxLength: 14 })}
         </Field>
-        <Field label="Size" error={errors.size} style={half}>
-          {input('size', { placeholder: 'e.g. 9' })}
-        </Field>
-      </Row>
-      <View style={twoCol ? { flexDirection: 'row', gap: 10 } : undefined}>
-        <Field label="Product name (optional)" error={errors.product_name} style={twoCol ? half : undefined}>
-          {input('product_name', { placeholder: 'e.g. Kolhapuri Kurundwad' })}
-        </Field>
-        <Field label="Note (optional)" error={errors.note} style={twoCol ? half : undefined}>
+        <Field label="Note (optional)" error={errors.note} style={half}>
           {input('note', { placeholder: 'e.g. RED' })}
         </Field>
-      </View>
-      {FEATURES.cod && typePicker ? (
-        <Field label="Shipment type">
-          <TypeButtons value={f.payment_type} onChange={(v) => onChange('payment_type', v)} />
-        </Field>
-      ) : null}
-      {f.payment_type === 'COD' ? (
-        <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12, marginTop: 2 }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>COD details</Text>
-          <Text style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
-            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID{' '}
-            {COD_FIXED.contractId} · {COD_FIXED.hub}. From is always the shop. Size + Note print as “COD 1999 (Size 8 …)”.
-          </Text>
-          <Row>
-            {showAmount ? (
-              <Field label="COD amount (₹)" required error={errors.amount} style={half}>
-                {input('amount', { keyboardType: 'decimal-pad', placeholder: '1299' })}
-              </Field>
-            ) : (
-              <View style={half} />
-            )}
-            <Field label="Weight" error={errors.weight} style={half}>
-              {input('weight', { placeholder: 'e.g. 800 g' })}
-            </Field>
-          </Row>
-          <Field label="Booking date" error={errors.booking_date}>
-            <View style={hl('booking_date') ? { borderRadius: 8, backgroundColor: C.tint } : undefined}>
-              <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder="Pick date" />
-            </View>
-          </Field>
-        </View>
-      ) : showAmount ? (
+      </Row>
+      {f.payment_type !== 'COD' && showAmount ? (
         <Row>
           <Field label="Amount (₹, optional)" error={errors.amount} style={half}>
             {input('amount', { keyboardType: 'decimal-pad', placeholder: 'Optional' })}

@@ -9,6 +9,7 @@ import { maskMobile } from '@/lib/format';
 import { DEFAULT_STAFF_PERMISSIONS, PERMISSIONS } from '@shared/permissions';
 import { C } from '@/lib/theme';
 import type { StaffUser } from '../(tabs)/staff';
+import { t } from '@/lib/i18n';
 
 /** Screen 10 · Staff permissions (owner only). Each switch saves instantly. */
 export default function StaffPermissions() {
@@ -28,8 +29,8 @@ export default function StaffPermissions() {
   const back = () => (router.canGoBack() ? router.back() : router.replace('/staff'));
   if (!u) {
     return (
-      <Page title="Permissions">
-        {users.isLoading ? <Loading /> : <Banner kind="danger" text="Staff not found" />}
+      <Page title={t('Permissions')}>
+        {users.isLoading ? <Loading /> : <Banner kind="danger" text={t('Staff not found')} />}
       </Page>
     );
   }
@@ -50,9 +51,9 @@ export default function StaffPermissions() {
 
   const groups = ['Orders', 'Printing', 'Special'] as const;
   return (
-    <Page title="Permissions">
+    <Page title={t('Permissions')}>
       <Pressable onPress={back} style={{ marginBottom: 10 }}>
-        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>‹ Staff</Text>
+        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>{t('‹ Staff')}</Text>
       </Pressable>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: C.tint, alignItems: 'center', justifyContent: 'center' }}>
@@ -61,14 +62,14 @@ export default function StaffPermissions() {
         <View>
           <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>{u.name}</Text>
           <Muted>
-            {maskMobile(u.mobile)} · {u.is_active ? 'Active' : 'Removed'} · {codes.length} of {PERMISSIONS.length} on
+            {maskMobile(u.mobile)} · {u.is_active ? t('Active') : t('Removed')} · {t('{a} of {b} on', { a: codes.length, b: PERMISSIONS.length })}
           </Muted>
         </View>
       </Card>
       {err ? <Banner kind="danger" text={err} /> : null}
       {groups.map((g) => (
         <View key={g}>
-          <GroupLabel>{g}</GroupLabel>
+          <GroupLabel>{t(g)}</GroupLabel>
           <Card style={{ padding: 0 }}>
             {PERMISSIONS.filter((p) => p.group === g).map((p, i, arr) => (
               <View
@@ -78,7 +79,7 @@ export default function StaffPermissions() {
                   i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border },
                 ]}
               >
-                <Text style={{ fontSize: 16, color: C.text, flex: 1 }}>{p.label}</Text>
+                <Text style={{ fontSize: 16, color: C.text, flex: 1 }}>{t(p.label)}</Text>
                 <Toggle
                   value={codes.includes(p.code)}
                   onChange={(v) => save(v ? [...codes, p.code] : codes.filter((c) => c !== p.code))}
@@ -89,8 +90,8 @@ export default function StaffPermissions() {
         </View>
       ))}
       <Row style={{ alignItems: 'center', marginTop: 6 }} gap={14}>
-        <Button kind="secondary" title="Reset to default" onPress={() => save([...DEFAULT_STAFF_PERMISSIONS])} style={{ paddingHorizontal: 16 }} />
-        <Muted style={{ flex: 1, fontSize: 13 }}>Saved instantly. Applies on {u.name}’s next action.</Muted>
+        <Button kind="secondary" title={t('Reset to default')} onPress={() => save([...DEFAULT_STAFF_PERMISSIONS])} style={{ paddingHorizontal: 16 }} />
+        <Muted style={{ flex: 1, fontSize: 13 }}>{t('Saved instantly. Applies on {name}’s next action.', { name: u.name })}</Muted>
       </Row>
     </Page>
   );

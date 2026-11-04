@@ -3,6 +3,7 @@ import { Button, Muted, Pill } from './ui';
 import { C, R } from '@/lib/theme';
 import { payText, time } from '@/lib/format';
 import type { DuplicateMatch } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 /** Screen 5 · Duplicate warning (bottom sheet). */
 export function DuplicateSheet({
@@ -30,8 +31,8 @@ export function DuplicateSheet({
       <Pressable style={st.backdrop} onPress={onCancel} />
       <View style={st.sheet}>
         <View style={st.inner}>
-          <Pill kind="warn" text={sameMessage ? 'Possible duplicate' : 'Same customer recently'} />
-          <Text style={st.title}>{message}</Text>
+          <Pill kind="warn" text={sameMessage ? t('Possible duplicate') : t('Same customer recently')} />
+          <Text style={st.title}>{t(message)}</Text>
           <ScrollView style={{ maxHeight: 220 }}>
             {matches.map((m) => (
               <View key={m.id} style={st.match}>
@@ -42,17 +43,17 @@ export function DuplicateSheet({
                   {m.address} · {m.pincode}
                 </Muted>
                 <Muted>
-                  {m.mobile1} · {m.same_message ? 'Same WhatsApp message' : 'Same mobile + pincode'} · #{m.id} by {m.saved_by}, {time(m.created_at)}
+                  {m.mobile1} · {m.same_message ? t('Same WhatsApp message') : t('Same mobile + pincode')} · {t('#{id} by {name}, {time}', { id: m.id, name: m.saved_by, time: time(m.created_at) })}
                 </Muted>
               </View>
             ))}
           </ScrollView>
-          <Button title="Cancel, don't save" onPress={onCancel} style={{ marginTop: 14 }} />
-          {matches[0] ? <Button kind="secondary" title="View saved order" onPress={() => onView(matches[0].id)} style={{ marginTop: 10 }} /> : null}
+          <Button title={t("Cancel, don't save")} onPress={onCancel} style={{ marginTop: 14 }} />
+          {matches[0] ? <Button kind="secondary" title={t('View saved order')} onPress={() => onView(matches[0].id)} style={{ marginTop: 10 }} /> : null}
           {canOverride ? (
-            <Button kind="dangerLink" title="Save anyway (new order)" onPress={onSaveAnyway} loading={saving} style={{ marginTop: 6 }} />
+            <Button kind="dangerLink" title={t('Save anyway (new order)')} onPress={onSaveAnyway} loading={saving} style={{ marginTop: 6 }} />
           ) : (
-            <Text style={st.ask}>A real second order? Ask the owner to save it.</Text>
+            <Text style={st.ask}>{t('A real second order? Ask the owner to save it.')}</Text>
           )}
         </View>
       </View>

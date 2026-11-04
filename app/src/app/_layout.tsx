@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { loadLang, useLang } from '@/lib/i18n';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -10,6 +11,11 @@ import { C } from '@/lib/theme';
 
 function Gate() {
   const { me, ready } = useAuth();
+  // A new language redraws every screen once (screens use t() from '@/lib/i18n').
+  const { lang } = useLang();
+  useEffect(() => {
+    loadLang();
+  }, []);
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: C.ground, justifyContent: 'center' }}>
@@ -18,7 +24,7 @@ function Gate() {
     );
   }
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.ground } }}>
+    <Stack key={lang} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.ground } }}>
       <Stack.Protected guard={!me}>
         <Stack.Screen name="login" />
       </Stack.Protected>

@@ -1,11 +1,12 @@
 // Date box: tap -> the phone's calendar. Value is 'YYYY-MM-DD' ('' = any date).
+import { t } from '@/lib/i18n';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useState } from 'react';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { C, R } from '@/lib/theme';
 import { niceDate, toISO } from './dateText';
 
-export function DateField({ label, value, onChange, min, max, placeholder = 'Any date' }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string; placeholder?: string }) {
+export function DateField({ label, value, onChange, min, max, placeholder = t('Any date') }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string; placeholder?: string }) {
   const [ios, setIos] = useState(false);
   const d = value ? new Date(`${value}T12:00:00`) : new Date();
   const open = () => {

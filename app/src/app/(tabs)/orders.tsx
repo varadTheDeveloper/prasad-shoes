@@ -15,6 +15,7 @@ import { setSelection } from '@/lib/selection';
 import { pagesFor } from '@shared/label';
 import { C, R } from '@/lib/theme';
 import type { Order } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 type PrintFilter = 'no' | 'yes' | 'all';
 const PAGE = 50; // orders loaded at a time; more load while scrolling
@@ -150,9 +151,9 @@ export default function Orders() {
     try {
       const f = await apiFile('GET', `/orders/export?${filterQs}`);
       await saveFile(f.name, f.bytes);
-      setExporting(`Downloaded ${f.name} – opens in Excel`);
+      setExporting(t('Downloaded {name} – opens in Excel', { name: f.name }));
     } catch (e) {
-      setExporting((e as ApiError).message);
+      setExporting(t((e as ApiError).message));
     }
   }
 
@@ -171,7 +172,7 @@ export default function Orders() {
       const ids = [...selected].sort((a, b) => b - a); // same order as Download Word
       // Up to 2 minutes: a big Word file + the email provider can be slow. A retry with the same id never sends twice.
       const r = await api<{ to: string; orders: number }>('POST', '/labels/email', { orderIds: ids, client_request_id: sendId.current }, 120_000);
-      setSendMsg({ kind: 'ok', text: `Orders successfully sent to ${r.to}` });
+      setSendMsg({ kind: 'ok', text: t('Orders successfully sent to {to}', { to: r.to }) });
       setSelected(new Set()); // cleared only after the email was accepted
       setAllIds(null);
       qc.invalidateQueries({ queryKey: ['batches'] });
@@ -179,7 +180,7 @@ export default function Orders() {
       const ae = e as ApiError;
       // Clear reasons are shown as they are; anything else gets the plain retry message. Selection is kept.
       const keep = ['BUSY', 'RATE_LIMITED', 'EMAIL_NOT_SET_UP', 'FORBIDDEN', 'VALIDATION'];
-      setSendMsg({ kind: 'danger', text: keep.includes(ae.code) ? ae.message : 'Unable to send email. Please try again.' });
+      setSendMsg({ kind: 'danger', text: keep.includes(ae.code) ? t(ae.message) : t('Unable to send email. Please try again.') });
     } finally {
       setSending(false);
     }
@@ -188,8 +189,8 @@ export default function Orders() {
   const statusChips = !deleted ? (
     <View style={st.chips}>
       {/* Tap again to show both (no separate "All") */}
-      <Chip title="Not printed" active={printed === 'no'} onPress={() => setPrinted(printed === 'no' ? 'all' : 'no')} />
-      <Chip title="Printed" active={printed === 'yes'} onPress={() => setPrinted(printed === 'yes' ? 'all' : 'yes')} />
+      <Chip title={t('Not printed')} active={printed === 'no'} onPress={() => setPrinted(printed === 'no' ? 'all' : 'no')} />
+      <Chip title={t('Printed')} active={printed === 'yes'} onPress={() => setPrinted(printed === 'yes' ? 'all' : 'yes')} />
     </View>
   ) : null;
 
@@ -197,18 +198,18 @@ export default function Orders() {
     <View style={[st.filters, { maxWidth: wide ? 1100 : 720 }]}>
       {deleted ? (
         <Pressable onPress={() => setDeleted(false)} style={st.deletedBar} hitSlop={6}>
-          <Text style={{ color: C.danger, fontSize: 14, fontWeight: '700' }}>Showing deleted orders · tap to go back</Text>
+          <Text style={{ color: C.danger, fontSize: 14, fontWeight: '700' }}>{t('Showing deleted orders · tap to go back')}</Text>
         </Pressable>
       ) : null}
       <View style={st.card}>
         <View style={[st.line, !wide && { flexWrap: 'wrap' }]}>
           <View style={{ flexDirection: 'row', gap: 10, flex: wide ? 1.2 : undefined, width: wide ? undefined : '100%' }}>
-            <DateField label="From" value={from} onChange={setFrom} max={to || undefined} />
-            <DateField label="To" value={to} onChange={setTo} min={from || undefined} />
+            <DateField label={t('From')} value={from} onChange={setFrom} max={to || undefined} />
+            <DateField label={t('To')} value={to} onChange={setTo} min={from || undefined} />
           </View>
           <View style={[st.searchBox, wide ? { flex: 1, marginTop: 18 } : { width: '100%' }]}>
             <Text style={st.searchIcon}>🔍</Text>
-            <Input value={q} onChangeText={setQ} placeholder="Search name, mobile or pincode" style={st.searchInput} />
+            <Input value={q} onChangeText={setQ} placeholder={t('Search name, mobile or pincode')} style={st.searchInput} />
           </View>
         </View>
         <View style={[st.line, { marginTop: 10, justifyContent: 'space-between' }]}>
@@ -216,7 +217,7 @@ export default function Orders() {
           {table && total > 0 ? (
             <Button
               kind="secondary"
-              title={exporting === 'busy' ? 'Preparing…' : `⬇ Excel (${total})`}
+              title={exporting === 'busy' ? t('Preparing…') : `⬇ Excel (${total})`}
               loading={exporting === 'busy'}
               onPress={exportExcel}
               style={{ paddingVertical: 8, paddingHorizontal: 14 }}
@@ -236,7 +237,7 @@ export default function Orders() {
           hitSlop={6}
         >
           <Text style={{ color: C.action, fontSize: 14, fontWeight: '600' }}>
-            ⚠ {olderCount} older order{olderCount === 1 ? '' : 's'} not printed – show {olderCount === 1 ? 'it' : 'them'}
+            {t(olderCount === 1 ? '⚠ {n} older order not printed – show it' : '⚠ {n} older orders not printed – show them', { n: olderCount })}
           </Text>
         </Pressable>
       ) : null}
@@ -245,19 +246,22 @@ export default function Orders() {
           {canPrint && !deleted ? (
             <Pressable style={st.selectAll} onPress={toggleAll} disabled={selecting} hitSlop={6}>
               {selecting ? <ActivityIndicator color={C.action} /> : <Checkbox checked={allSelected} onPress={toggleAll} />}
-              <Text style={{ fontSize: 15, color: C.text, fontWeight: '600' }}>Select all ({total})</Text>
+              <Text style={{ fontSize: 15, color: C.text, fontWeight: '600' }}>{t('Select all ({n})', { n: total })}</Text>
             </Pressable>
           ) : (
             <View />
           )}
           <Muted style={{ fontSize: 13 }}>
-            {orders.length} of {total}
+            {t('{a} of {b}', { a: orders.length, b: total })}
           </Muted>
         </View>
       ) : null}
       {allSelected && allIds! < total ? (
         <Muted style={{ fontSize: 13, marginBottom: 6 }}>
-          {total - allIds!} printed order{total - allIds! === 1 ? '' : 's'} skipped – only the owner can print again
+          {t(
+            total - allIds! === 1 ? '{n} printed order skipped – only the owner can print again' : '{n} printed orders skipped – only the owner can print again',
+            { n: total - allIds! },
+          )}
         </Muted>
       ) : null}
     </View>
@@ -265,7 +269,7 @@ export default function Orders() {
 
   const renderItem = ({ item: o, index }: { item: Order; index: number }) => {
     const sel = selected.has(o.id);
-    const meta = [o.pincode, o.size ? `${o.size} no` : '', o.product_name ?? '', o.note ?? ''].filter(Boolean).join(' · ');
+    const meta = [o.pincode, o.size ? t('{n} no', { n: o.size }) : '', o.product_name ?? '', o.note ?? ''].filter(Boolean).join(' · ');
     const pay = payText(o, showAmount);
     return (
       <View style={[st.rowWrap, { maxWidth: wide ? 1100 : 720 }]}>
@@ -284,10 +288,10 @@ export default function Orders() {
               <Text style={st.name} numberOfLines={1}>
                 {o.ship_name}
               </Text>
-              {o.dup_override ? <Text style={st.flag}>Saved anyway</Text> : null}
+              {o.dup_override ? <Text style={st.flag}>{t('Saved anyway')}</Text> : null}
               {pay ? <Text style={st.amount}>{pay}</Text> : null}
               <Text style={[st.status, { color: o.deleted_at ? C.danger : o.is_printed ? C.ok : C.warn }]}>
-                {o.deleted_at ? 'Deleted' : o.is_printed ? 'Printed' : 'Not printed'}
+                {o.deleted_at ? t('Deleted') : o.is_printed ? t('Printed') : t('Not printed')}
               </Text>
             </View>
             <Text style={st.meta} numberOfLines={1}>
@@ -305,12 +309,12 @@ export default function Orders() {
   return (
     <View style={{ flex: 1, backgroundColor: C.ground }}>
       <Header
-        title="Orders"
+        title={t('Orders')}
         right={
           admin ? (
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Chip title="List" active={!table} onPress={() => pickView('list')} />
-              <Chip title="Table" active={table} onPress={() => pickView('table')} />
+              <Chip title={t('List')} active={!table} onPress={() => pickView('list')} />
+              <Chip title={t('Table')} active={table} onPress={() => pickView('table')} />
             </View>
           ) : undefined
         }
@@ -334,7 +338,7 @@ export default function Orders() {
         keyExtractor={(o) => String(o.id)}
         renderItem={renderItem}
         ListHeaderComponent={filters}
-        ListEmptyComponent={list.isLoading ? <Loading /> : <Muted style={{ textAlign: 'center', padding: 30 }}>No orders for this filter.</Muted>}
+        ListEmptyComponent={list.isLoading ? <Loading /> : <Muted style={{ textAlign: 'center', padding: 30 }}>{t('No orders for this filter.')}</Muted>}
         onEndReached={() => list.hasNextPage && !list.isFetchingNextPage && list.fetchNextPage()}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
@@ -342,12 +346,12 @@ export default function Orders() {
             <View style={{ padding: 16, alignItems: 'center', gap: 10 }}>
               {list.isFetchingNextPage ? <ActivityIndicator color={C.action} /> : null}
               <Muted>
-                Showing {orders.length} of {total}
+                {t('Showing {a} of {b}', { a: orders.length, b: total })}
               </Muted>
-              {admin && !deleted ? <Button kind="link" title="Show deleted orders" onPress={() => setDeleted(true)} /> : null}
+              {admin && !deleted ? <Button kind="link" title={t('Show deleted orders')} onPress={() => setDeleted(true)} /> : null}
             </View>
           ) : admin && !deleted ? (
-            <Button kind="link" title="Show deleted orders" onPress={() => setDeleted(true)} />
+            <Button kind="link" title={t('Show deleted orders')} onPress={() => setDeleted(true)} />
           ) : undefined
         }
         contentContainerStyle={{ padding: 18, paddingBottom: 24 }}
@@ -372,18 +376,18 @@ export default function Orders() {
           <View style={[st.footerCard, { maxWidth: wide ? 1100 : 720 }, admin && !wide && st.footerStacked]}>
             <View style={admin && !wide ? st.footerCountRow : st.footerCount}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: C.text }} numberOfLines={1}>
-                {selected.size} selected
+                {t('{n} selected', { n: selected.size })}
               </Text>
               <Muted>
                 {admin && !wide ? '· ' : ''}
-                {pagesFor(selected.size)} A4 page{pagesFor(selected.size) === 1 ? '' : 's'}
+                {t(pagesFor(selected.size) === 1 ? '{n} A4 page' : '{n} A4 pages', { n: pagesFor(selected.size) })}
               </Muted>
             </View>
             <View style={[st.footerButtons, admin && !wide && { justifyContent: 'space-between' }]}>
               {admin ? (
                 <Button
                   kind="secondary"
-                  title={sending ? 'Sending…' : '✉  Send to Owner'}
+                  title={sending ? t('Sending…') : t('✉  Send to Owner')}
                   onPress={sendToOwner}
                   loading={sending}
                   disabled={sending || selected.size === 0}
@@ -391,7 +395,7 @@ export default function Orders() {
                 />
               ) : null}
               <Button
-                title="Download Word"
+                title={t('Download Word')}
                 onPress={download}
                 disabled={sending}
                 style={admin && !wide ? { flex: 1, paddingHorizontal: 8 } : { paddingHorizontal: 22 }}

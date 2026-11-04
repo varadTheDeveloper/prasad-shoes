@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useAuth, useIsAdmin } from '@/lib/auth';
 import { C } from '@/lib/theme';
+import { useLang } from '@/lib/i18n';
 
 const icon =
   (name: keyof typeof Feather.glyphMap) =>
@@ -11,6 +12,7 @@ const icon =
 export default function TabsLayout() {
   const { me } = useAuth();
   const admin = useIsAdmin();
+  const { t } = useLang();
   if (me?.mustChangePassword) return <Redirect href="/change-password" />;
 
   return (
@@ -24,12 +26,12 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: C.ground },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('home') }} />
+      <Tabs.Screen name="index" options={{ title: t('Home'), tabBarIcon: icon('home') }} />
       {/* New orders are pasted on Home now; /new only sends old links there. */}
-      <Tabs.Screen name="new" options={{ title: 'New order', href: null }} />
-      <Tabs.Screen name="orders" options={{ title: 'Orders', tabBarIcon: icon('list') }} />
-      <Tabs.Screen name="staff" options={{ title: 'Staff', tabBarIcon: icon('users'), href: admin ? undefined : null }} />
-      <Tabs.Screen name="shop" options={{ title: 'Shop', tabBarIcon: icon('shopping-bag'), href: admin ? undefined : null }} />
+      <Tabs.Screen name="new" options={{ title: t('New order'), href: null }} />
+      <Tabs.Screen name="orders" options={{ title: t('Orders'), tabBarIcon: icon('list') }} />
+      <Tabs.Screen name="staff" options={{ title: t('Staff'), tabBarIcon: icon('users'), href: admin ? undefined : null }} />
+      <Tabs.Screen name="shop" options={{ title: t('Shop'), tabBarIcon: icon('shopping-bag'), href: admin ? undefined : null }} />
     </Tabs>
   );
 }

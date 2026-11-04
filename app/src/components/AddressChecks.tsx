@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { C } from '@/lib/theme';
 import type { FormState } from './OrderForm';
+import { t } from '@/lib/i18n';
 
 export interface PinWarning {
   level: 'danger' | 'warn';
@@ -31,7 +32,7 @@ export const mismatchKey = (pincode: string, m?: Mismatch) =>
   m && (m.district || m.state) ? `${pincode}|${m.district?.typed ?? ''}|${m.state?.typed ?? ''}` : '';
 export function mismatchText(pincode: string, m: Mismatch): string {
   return [
-    m.district ? `${m.district.inAddress ? 'Address says' : 'District'} "${m.district.typed}" does not match pincode ${pincode} (${m.district.pincode}).` : '',
+    m.district ? `${m.district.inAddress ? t('Address says') : t('District')} "${m.district.typed}" does not match pincode ${pincode} (${m.district.pincode}).` : '',
     m.state ? `State "${m.state.typed}" does not match pincode ${pincode} (${m.state.pincode}).` : '',
   ]
     .filter(Boolean)
@@ -99,44 +100,44 @@ export function AddressNotes({
       {check?.found ? (
         <View style={[st.note, st.ok]}>
           <Text style={st.okText}>
-            ✓ Pincode {check.pincode} · {check.districts.join(' / ')}, {check.state}
+            {t('✓ Pincode {pin} · {place}', { pin: check.pincode, place: `${check.districts.join(' / ')}, ${check.state}` })}
           </Text>
         </View>
       ) : null}
       {failed ? (
         <View style={[st.note, st.info]}>
-          <Text style={st.infoText}>Pincode check is not available right now. Check the pincode yourself.</Text>
+          <Text style={st.infoText}>{t('Pincode check is not available right now. Check the pincode yourself.')}</Text>
         </View>
       ) : null}
       {check?.warnings.map((w, i) => (
         <View key={i} style={[st.note, w.level === 'danger' ? st.danger : st.warn]}>
           <Text style={w.level === 'danger' ? st.dangerText : st.warnText}>
             {w.level === 'danger' ? '✕ ' : '! '}
-            {w.text}
+            {t(w.text)}
           </Text>
         </View>
       ))}
       {check && mismatch && (mismatch.district || mismatch.state) ? (
         <View style={[st.note, st.danger]}>
-          <Text style={st.dangerText}>District / State do not match pincode {check.pincode}</Text>
+          <Text style={st.dangerText}>{t('District / State do not match pincode {pin}', { pin: check.pincode })}</Text>
           {mismatch.district ? (
             <Text style={st.mmLine}>
-              {mismatch.district.inAddress ? 'Address says' : 'District:'} <Text style={{ fontWeight: '700' }}>{mismatch.district.typed}</Text> → pincode says{' '}
+              {mismatch.district.inAddress ? t('Address says') : t('District:')} <Text style={{ fontWeight: '700' }}>{mismatch.district.typed}</Text> {t('→ pincode says')}{' '}
               <Text style={{ fontWeight: '700' }}>{mismatch.district.pincode}</Text>
             </Text>
           ) : null}
           {mismatch.state ? (
             <Text style={st.mmLine}>
-              State: <Text style={{ fontWeight: '700' }}>{mismatch.state.typed}</Text> → pincode says{' '}
+              {t('State:')} <Text style={{ fontWeight: '700' }}>{mismatch.state.typed}</Text> {t('→ pincode says')}{' '}
               <Text style={{ fontWeight: '700' }}>{mismatch.state.pincode}</Text>
             </Text>
           ) : null}
           <View style={st.actions}>
             <Pressable onPress={onUsePincode} hitSlop={8}>
-              <Text style={st.action}>Use {use}</Text>
+              <Text style={st.action}>{t('Use {x}', { x: use })}</Text>
             </Pressable>
             <Pressable onPress={onKeepTyped} hitSlop={8}>
-              <Text style={st.action}>Keep as written</Text>
+              <Text style={st.action}>{t('Keep as written')}</Text>
             </Pressable>
           </View>
         </View>
@@ -144,15 +145,15 @@ export function AddressNotes({
       {unused.map((l) => (
         <View key={l} style={[st.note, st.warn]}>
           <Text style={st.warnText}>
-            <Text style={{ fontWeight: '700' }}>Not used: </Text>
+            <Text style={{ fontWeight: '700' }}>{t('Not used: ')}</Text>
             {l}
           </Text>
           <View style={st.actions}>
             <Pressable onPress={() => onAddToAddress(l)} hitSlop={8}>
-              <Text style={st.action}>Add to address</Text>
+              <Text style={st.action}>{t('Add to address')}</Text>
             </Pressable>
             <Pressable onPress={() => onIgnore(l)} hitSlop={8}>
-              <Text style={st.action}>Not needed</Text>
+              <Text style={st.action}>{t('Not needed')}</Text>
             </Pressable>
           </View>
         </View>

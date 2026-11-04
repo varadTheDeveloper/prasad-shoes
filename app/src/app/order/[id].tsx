@@ -13,6 +13,7 @@ import type { PaymentType } from '@shared/types';
 import { dayTime } from '@/lib/format';
 import { C } from '@/lib/theme';
 import type { Order } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 /** Screen 7 · Order detail / edit. */
 export default function OrderDetail() {
@@ -59,15 +60,15 @@ export default function OrderDetail() {
 
   if (q.isError) {
     return (
-      <Page title="Order">
+      <Page title={t('Order')}>
         <Banner kind="danger" text={(q.error as ApiError).message} />
-        <Button kind="secondary" title="Back" onPress={back} />
+        <Button kind="secondary" title={t('Back')} onPress={back} />
       </Page>
     );
   }
   if (!o || !form) {
     return (
-      <Page title={`Order #${id}`}>
+      <Page title={t('Order #{id}', { id })}>
         <Loading />
       </Page>
     );
@@ -92,7 +93,7 @@ export default function OrderDetail() {
     setMsg(null);
     try {
       await api('PUT', `/orders/${id}`, toInput(form!, showAmount));
-      setMsg({ kind: 'ok', text: o!.is_printed ? 'Saved. This order was already printed – download its label again.' : 'Changes saved.' });
+      setMsg({ kind: 'ok', text: o!.is_printed ? t('Saved. This order was already printed – download its label again.') : t('Changes saved.') });
       refreshLists();
     } catch (err) {
       const ae = err as ApiError;
@@ -121,7 +122,7 @@ export default function OrderDetail() {
     try {
       await api('POST', `/orders/${id}/restore`);
       refreshLists();
-      setMsg({ kind: 'ok', text: 'Order restored.' });
+      setMsg({ kind: 'ok', text: t('Order restored.') });
     } catch (err) {
       setMsg({ kind: 'danger', text: (err as ApiError).message });
     } finally {
@@ -131,16 +132,16 @@ export default function OrderDetail() {
 
   return (
     <Page
-      title={`Order #${o.id}`}
+      title={t('Order #{id}', { id: o.id })}
       footer={
         o.deleted_at ? (
-          admin ? <Button title="Restore order" onPress={restore} loading={busy} /> : null
+          admin ? <Button title={t('Restore order')} onPress={restore} loading={busy} /> : null
         ) : canEdit ? (
           <View>
             <Row>
-              <Button title="Save changes" onPress={save} loading={busy && !confirmDelete} style={{ flex: 1.6 }} />
+              <Button title={t('Save changes')} onPress={save} loading={busy && !confirmDelete} style={{ flex: 1.6 }} />
               {canDelete ? (
-                <Button kind="danger" title={confirmDelete ? 'Tap again to delete' : 'Delete'} onPress={remove} style={{ flex: 1 }} />
+                <Button kind="danger" title={confirmDelete ? t('Tap again to delete') : t('Delete')} onPress={remove} style={{ flex: 1 }} />
               ) : null}
             </Row>
           </View>
@@ -148,17 +149,17 @@ export default function OrderDetail() {
       }
     >
       <Pressable onPress={back} style={{ marginBottom: 10 }}>
-        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>‹ Back</Text>
+        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>{t('‹ Back')}</Text>
       </Pressable>
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <Pill kind={o.deleted_at ? 'danger' : o.is_printed ? 'ok' : 'warn'} text={o.deleted_at ? 'Deleted' : o.is_printed ? 'Printed' : 'Not printed'} />
+        <Pill kind={o.deleted_at ? 'danger' : o.is_printed ? 'ok' : 'warn'} text={o.deleted_at ? t('Deleted') : o.is_printed ? t('Printed') : t('Not printed')} />
         <Muted>
-          Saved by {o.created_by_name} · {dayTime(o.created_at)}
+          {t('Saved by {name} · {time}', { name: o.created_by_name, time: dayTime(o.created_at) })}
         </Muted>
       </Row>
-      {o.is_printed && canEdit ? <Banner text="Already printed – reprint after editing." /> : null}
+      {o.is_printed && canEdit ? <Banner text={t('Already printed – reprint after editing.')} /> : null}
       {msg ? <Banner kind={msg.kind} text={msg.text} /> : null}
-      {!canEdit && !o.deleted_at ? <Banner kind="info" text="You can view this order but not edit it." /> : null}
+      {!canEdit && !o.deleted_at ? <Banner kind="info" text={t('You can view this order but not edit it.')} /> : null}
 
       <ToPreview order={formToLabel(form)} />
       <AddressNotes
@@ -188,16 +189,16 @@ export default function OrderDetail() {
 
       <Card style={{ marginTop: 6 }}>
         <Pressable onPress={() => setShowRaw((v) => !v)} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 16, color: C.text }}>Original WhatsApp message</Text>
-          <Text style={{ color: C.muted }}>{showRaw ? 'Hide' : 'Show'}</Text>
+          <Text style={{ fontSize: 16, color: C.text }}>{t('Original WhatsApp message')}</Text>
+          <Text style={{ color: C.muted }}>{showRaw ? t('Hide') : t('Show')}</Text>
         </Pressable>
         {showRaw ? (
           <Text selectable style={{ marginTop: 12, color: C.text, fontSize: 14, lineHeight: 20 }}>
-            {o.raw_message || '(typed by hand, nothing pasted)'}
+            {o.raw_message || t('(typed by hand, nothing pasted)')}
           </Text>
         ) : null}
       </Card>
-      {canEdit && !canDelete ? <Muted style={{ textAlign: 'center' }}>Only the owner can delete orders.</Muted> : null}
+      {canEdit && !canDelete ? <Muted style={{ textAlign: 'center' }}>{t('Only the owner can delete orders.')}</Muted> : null}
     </Page>
   );
 }

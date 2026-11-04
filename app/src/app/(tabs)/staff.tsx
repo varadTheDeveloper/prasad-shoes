@@ -8,6 +8,7 @@ import { Banner, Button, Card, Field, Input, Loading, Muted, Page, Row, SectionT
 import { maskMobile } from '@/lib/format';
 import { C } from '@/lib/theme';
 import { PERMISSIONS } from '@shared/permissions';
+import { t } from '@/lib/i18n';
 
 export interface StaffUser {
   id: number;
@@ -44,7 +45,7 @@ export default function Staff() {
     setAdding(true);
     try {
       const u = await api<StaffUser>('POST', '/users', { name, mobile, tempPassword: pwd });
-      setMsg({ kind: 'ok', text: `${u.name} added. Tell them: mobile ${u.mobile}, password ${pwd}. They set their own password at first login.` });
+      setMsg({ kind: 'ok', text: t('{name} added. Tell them: mobile {m}, password {p}. They set their own password at first login.', { name: u.name, m: u.mobile, p: pwd }) });
       setName('');
       setMobile('');
       setPwd('');
@@ -70,7 +71,7 @@ export default function Staff() {
   async function doReset(u: StaffUser) {
     try {
       await api('PATCH', `/users/${u.id}`, { resetPassword: resetPwd });
-      setMsg({ kind: 'ok', text: `Password for ${u.name} reset to “${resetPwd}”. They must change it at next login.` });
+      setMsg({ kind: 'ok', text: t('Password for {name} reset to “{p}”. They must change it at next login.', { name: u.name, p: resetPwd }) });
       setResetFor(null);
       setResetPwd('');
       reload();
@@ -83,28 +84,28 @@ export default function Staff() {
   const active = staff.filter((u) => u.is_active).length;
 
   return (
-    <Page title="Staff">
+    <Page title={t('Staff')}>
       <Card>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 12 }}>Add staff</Text>
-        <Field label="Name" error={errors.name}>
-          <Input value={name} onChangeText={setName} placeholder="Staff name" autoCapitalize="words" />
+        <Text style={{ fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 12 }}>{t('Add staff')}</Text>
+        <Field label={t('Name')} error={errors.name}>
+          <Input value={name} onChangeText={setName} placeholder={t('Staff name')} autoCapitalize="words" />
         </Field>
-        <Field label="Mobile number" error={errors.mobile}>
-          <Input value={mobile} onChangeText={setMobile} placeholder="10-digit mobile" keyboardType="phone-pad" maxLength={14} />
+        <Field label={t('Mobile number')} error={errors.mobile}>
+          <Input value={mobile} onChangeText={setMobile} placeholder={t('10-digit mobile')} keyboardType="phone-pad" maxLength={14} />
         </Field>
-        <Field label="Temporary password" error={errors.tempPassword}>
-          <Input value={pwd} onChangeText={setPwd} placeholder="At least 6 characters" autoCapitalize="none" />
+        <Field label={t('Temporary password')} error={errors.tempPassword}>
+          <Input value={pwd} onChangeText={setPwd} placeholder={t('At least 6 characters')} autoCapitalize="none" />
         </Field>
-        <Button title="Add staff" onPress={add} loading={adding} />
+        <Button title={t('Add staff')} onPress={add} loading={adding} />
       </Card>
       {msg ? <Banner kind={msg.kind} text={msg.text} /> : null}
 
-      <SectionTitle>Staff ({active} active)</SectionTitle>
+      <SectionTitle>{t('Staff ({n} active)', { n: active })}</SectionTitle>
       {users.isLoading ? <Loading /> : null}
       <Card style={{ padding: 0 }}>
         {staff.length === 0 && !users.isLoading ? (
           <View style={{ padding: 16 }}>
-            <Muted>No staff yet. Add the first one above.</Muted>
+            <Muted>{t('No staff yet. Add the first one above.')}</Muted>
           </View>
         ) : null}
         {staff.map((u, i) => (
@@ -116,11 +117,12 @@ export default function Staff() {
               <Pressable style={{ flex: 1 }} onPress={() => router.push(`/staff/${u.id}`)}>
                 <Text style={{ fontSize: 17, fontWeight: '600', color: u.is_active ? C.text : C.muted }}>{u.name}</Text>
                 <Muted style={{ fontSize: 13 }}>
-                  {maskMobile(u.mobile)} · {u.permissions.length} of {PERMISSIONS.length} on · {u.orders_today} today
-                  {u.must_change_password ? ' · new password pending' : ''}
+                  {maskMobile(u.mobile)} · {t('{a} of {b} on', { a: u.permissions.length, b: PERMISSIONS.length })} ·{' '}
+                  {t('{n} today', { n: u.orders_today })}
+                  {u.must_change_password ? ` · ${t('new password pending')}` : ''}
                 </Muted>
                 <Row gap={16} style={{ marginTop: 4 }}>
-                  <Text style={{ color: C.action, fontSize: 14, fontWeight: '600' }}>Permissions ›</Text>
+                  <Text style={{ color: C.action, fontSize: 14, fontWeight: '600' }}>{t('Permissions ›')}</Text>
                   <Text
                     style={{ color: C.action, fontSize: 14, fontWeight: '600' }}
                     onPress={() => {
@@ -128,25 +130,25 @@ export default function Staff() {
                       setResetPwd('');
                     }}
                   >
-                    Reset password
+                    {t('Reset password')}
                   </Text>
                 </Row>
               </Pressable>
               <View style={{ alignItems: 'center' }}>
                 <Toggle value={u.is_active} onChange={(v) => setActive(u, v)} />
-                <Muted style={{ fontSize: 12 }}>{u.is_active ? 'Active' : 'Removed'}</Muted>
+                <Muted style={{ fontSize: 12 }}>{u.is_active ? t('Active') : t('Removed')}</Muted>
               </View>
             </Row>
             {resetFor === u.id ? (
               <Row style={{ marginTop: 12, alignItems: 'flex-start' }}>
-                <Input value={resetPwd} onChangeText={setResetPwd} placeholder="New temporary password" autoCapitalize="none" style={{ flex: 1 }} />
-                <Button title="Reset" onPress={() => doReset(u)} style={{ paddingHorizontal: 18 }} />
+                <Input value={resetPwd} onChangeText={setResetPwd} placeholder={t('New temporary password')} autoCapitalize="none" style={{ flex: 1 }} />
+                <Button title={t('Reset')} onPress={() => doReset(u)} style={{ paddingHorizontal: 18 }} />
               </Row>
             ) : null}
           </View>
         ))}
       </Card>
-      <Muted style={{ textAlign: 'center' }}>Turning a staff member off logs them out on their next action. Their orders stay.</Muted>
+      <Muted style={{ textAlign: 'center' }}>{t('Turning a staff member off logs them out on their next action. Their orders stay.')}</Muted>
     </Page>
   );
 }

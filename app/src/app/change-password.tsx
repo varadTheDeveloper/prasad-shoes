@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Banner, Button, Card, Field, Input, Page } from '@/components/ui';
 import { C } from '@/lib/theme';
+import { t } from '@/lib/i18n';
 
 /** Screen 12 · Change password (forced at first login, and from Home). */
 export default function ChangePassword() {
@@ -18,15 +19,15 @@ export default function ChangePassword() {
   const [top, setTop] = useState('');
 
   const checks = [
-    { ok: newP.length >= 6, text: 'At least 6 characters' },
-    { ok: newP.length > 0 && newP === conf, text: 'New and confirm match' },
-    { ok: newP.length > 0 && newP !== oldP, text: first ? 'Different from temporary password' : 'Different from current password' },
+    { ok: newP.length >= 6, text: t('At least 6 characters') },
+    { ok: newP.length > 0 && newP === conf, text: t('New and confirm match') },
+    { ok: newP.length > 0 && newP !== oldP, text: first ? t('Different from temporary password') : t('Different from current password') },
   ];
 
   async function save() {
     setErrors({});
     setTop('');
-    if (!checks.every((c) => c.ok)) return setTop('Please meet all three rules below.');
+    if (!checks.every((c) => c.ok)) return setTop(t('Please meet all three rules below.'));
     setBusy(true);
     try {
       await api('POST', '/auth/change-password', { oldPassword: oldP, newPassword: newP });
@@ -41,21 +42,21 @@ export default function ChangePassword() {
   }
 
   return (
-    <Page title="Change password" footer={<Button title="Save new password" onPress={save} loading={busy} />}>
+    <Page title={t('Change password')} footer={<Button title={t('Save new password')} onPress={save} loading={busy} />}>
       {!first ? (
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={{ marginBottom: 10 }}>
-          <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>‹ Back</Text>
+          <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>{t('‹ Back')}</Text>
         </Pressable>
       ) : null}
-      {first ? <Banner title="First login" text="Set your own password before you start. The owner cannot see it." /> : null}
+      {first ? <Banner title={t('First login')} text={t('Set your own password before you start. The owner cannot see it.')} /> : null}
       {top ? <Banner kind="danger" text={top} /> : null}
-      <Field label={first ? 'Temporary password' : 'Current password'} error={errors.oldPassword}>
+      <Field label={first ? t('Temporary password') : t('Current password')} error={errors.oldPassword}>
         <Input value={oldP} onChangeText={setOldP} secureTextEntry />
       </Field>
-      <Field label="New password" error={errors.newPassword}>
+      <Field label={t('New password')} error={errors.newPassword}>
         <Input value={newP} onChangeText={setNewP} secureTextEntry />
       </Field>
-      <Field label="Confirm new password">
+      <Field label={t('Confirm new password')}>
         <Input value={conf} onChangeText={setConf} secureTextEntry onSubmitEditing={save} />
       </Field>
       <Card>
@@ -66,7 +67,7 @@ export default function ChangePassword() {
           </View>
         ))}
       </Card>
-      {first ? <Button kind="link" title="Log out" onPress={logout} /> : null}
+      {first ? <Button kind="link" title={t('Log out')} onPress={logout} /> : null}
     </Page>
   );
 }

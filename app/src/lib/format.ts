@@ -1,4 +1,5 @@
 import { FEATURES } from '@shared/features';
+import { t } from './i18n';
 
 const TZ = 'Asia/Kolkata';
 
@@ -9,7 +10,7 @@ const TZ = 'Asia/Kolkata';
 export function payText(o: { payment_type: string; amount?: number | null }, showAmount = true): string {
   const amt = showAmount && o.amount !== undefined && o.amount !== null && o.amount > 0 ? rupees(o.amount) : '';
   if (!FEATURES.cod) return amt;
-  return o.payment_type === 'COD' ? `COD ${amt}`.trim() : `Prepaid ${amt}`.trim();
+  return o.payment_type === 'COD' ? `COD ${amt}`.trim() : `${t('Prepaid')} ${amt}`.trim();
 }
 
 export function rupees(n: number | null | undefined): string {
@@ -43,7 +44,7 @@ export function dayTime(iso: string): string {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d);
   const today = todayISO();
   if (day === today) return time(iso);
-  if (day === shiftISO(today, -1)) return `yesterday ${time(iso)}`;
+  if (day === shiftISO(today, -1)) return `${t('yesterday')} ${time(iso)}`;
   return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: TZ })}, ${time(iso)}`;
 }
 

@@ -24,6 +24,7 @@ import { codRemainder, findUnused, parseCodMessage, parseWhatsApp } from '@share
 import { FEATURES } from '@shared/features';
 import { C, R } from '@/lib/theme';
 import type { DuplicateMatch, Order, PaymentType } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 const PARSED_KEYS = ['ship_name', 'address', 'landmark', 'district', 'state', 'pincode', 'mobile1', 'mobile2', 'size'] as const;
 
@@ -165,14 +166,14 @@ export function usePasteOrder() {
 
   async function pasteFromClipboard() {
     try {
-      const t = await Clipboard.getStringAsync();
-      if (t?.trim()) {
+      const copied = await Clipboard.getStringAsync();
+      if (copied?.trim()) {
         clear();
         setSaved(null);
-        applyPaste(t, typeRef.current, new Set());
-      } else setClipNote('Nothing copied. In WhatsApp, long-press the customer’s message → Copy, then tap Paste again.');
+        applyPaste(copied, typeRef.current, new Set());
+      } else setClipNote(t('Nothing copied. In WhatsApp, long-press the customer’s message → Copy, then tap Paste again.'));
     } catch {
-      setClipNote(Platform.OS === 'web' ? 'Press Ctrl+V in the box below to paste.' : 'Could not read the copied text. Paste it in the box below.');
+      setClipNote(Platform.OS === 'web' ? t('Press Ctrl+V in the box below to paste.') : t('Could not read the copied text. Paste it in the box below.'));
     }
   }
 
@@ -205,7 +206,7 @@ export function usePasteOrder() {
     const e = validate(form, amountOn);
     if (Object.keys(e).length) {
       setErrors(e);
-      setTopError('Please fill the fields marked in red.');
+      setTopError(t('Please fill the fields marked in red.'));
       return;
     }
     if (needsAck && !force) {
@@ -269,23 +270,23 @@ export function PasteBox({ s, wide }: { s: PasteOrderState; wide?: boolean }) {
   return (
     <View>
       {FEATURES.cod ? (
-        <Field label="Shipment type – pick before pasting">
+        <Field label={t('Shipment type – pick before pasting')}>
           <TypeButtons value={s.type} onChange={s.setType} />
         </Field>
       ) : null}
       <Pressable onPress={s.pasteFromClipboard} style={({ pressed }) => [st.pasteBig, pressed && { opacity: 0.85 }]}>
-        <Text style={st.pasteBigText}>{cod ? '📋  Paste COD booking message' : '📋  Paste from WhatsApp'}</Text>
+        <Text style={st.pasteBigText}>{cod ? t('📋  Paste COD booking message') : t('📋  Paste from WhatsApp')}</Text>
         <Text style={st.pasteBigSub}>
-          {cod ? 'Copy the COD booking message (date, weight, amount, address), then tap here' : 'Copy the customer’s address message, then tap here'}
+          {cod ? t('Copy the COD booking message (date, weight, amount, address), then tap here') : t('Copy the customer’s address message, then tap here')}
         </Text>
       </Pressable>
       {s.clipNote ? <Banner kind="info" text={s.clipNote} /> : null}
-      <Field label="Message">
+      <Field label={t('Message')}>
         <Input
           value={s.raw}
           onChangeText={s.applyPaste}
           multiline
-          placeholder={'…or paste / type the message here'}
+          placeholder={t('…or paste / type the message here')}
           style={[st.paste, wide && { minHeight: 200 }]}
           autoCorrect={false}
           autoCapitalize="none"
@@ -295,14 +296,14 @@ export function PasteBox({ s, wide }: { s: PasteOrderState; wide?: boolean }) {
         {s.parsed ? (
           <Pill
             kind={s.parsed.missing.length ? 'warn' : 'ok'}
-            text={s.parsed.missing.length ? `${s.parsed.filled.length} filled · check highlighted` : `${s.parsed.filled.length} fields auto-filled`}
+            text={t(s.parsed.missing.length ? '{n} filled · check highlighted' : '{n} fields auto-filled', { n: s.parsed.filled.length })}
           />
         ) : (
           <View />
         )}
         {has ? (
           <Pressable onPress={() => s.clear()} hitSlop={10}>
-            <Text style={{ color: C.muted, fontSize: 15 }}>Clear</Text>
+            <Text style={{ color: C.muted, fontSize: 15 }}>{t('Clear')}</Text>
           </Pressable>
         ) : null}
       </Row>
@@ -327,7 +328,13 @@ export function CheckBox({ s }: { s: PasteOrderState }) {
       />
       {s.autoFilled.size ? (
         <Text style={st.small}>
-          {[...s.autoFilled].map((k) => (k === 'district' ? 'District' : 'State')).join(' and ')} set from the pincode.
+          {t(
+            s.autoFilled.has('district') && s.autoFilled.has('state')
+              ? 'District and State set from the pincode.'
+              : s.autoFilled.has('district')
+                ? 'District set from the pincode.'
+                : 'State set from the pincode.',
+          )}
         </Text>
       ) : null}
     </View>
@@ -344,18 +351,23 @@ export function SaveBar({ s }: { s: PasteOrderState }) {
     <View>
       {s.saved ? (
         <Pressable onPress={() => router.push(`/order/${s.saved!.id}`)}>
-          <Banner kind="ok" title={`Saved #${s.saved.id} · ${s.saved.ship_name}`} text="Ready for the next order. Tap to view this one." />
+          <Banner kind="ok" title={t('Saved #{id} · {name}', { id: s.saved.id, name: s.saved.ship_name })} text={t('Ready for the next order. Tap to view this one.')} />
         </Pressable>
       ) : null}
       {s.topError ? <Banner kind="danger" text={s.topError} /> : null}
       {s.askAck ? (
         <Banner
           kind="warn"
-          text={`Check the ${s.noteCount === 1 ? 'orange / red note' : `${s.noteCount} orange / red notes`} above the form. If the label is right, tap Save again.`}
+          text={t(
+            s.noteCount === 1
+              ? 'Check the orange / red note above the form. If the label is right, tap Save again.'
+              : 'Check the {n} orange / red notes above the form. If the label is right, tap Save again.',
+            { n: s.noteCount },
+          )}
         />
       ) : null}
       <Button
-        title={s.askAck ? 'Checked – Save order' : 'Save order'}
+        title={s.askAck ? t('Checked – Save order') : t('Save order')}
         onPress={() => s.save(false)}
         loading={s.saving && !s.dup}
         disabled={s.saving}

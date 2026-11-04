@@ -12,6 +12,7 @@ import { dayTime } from '@/lib/format';
 import { pagesFor } from '@shared/label';
 import { C, R } from '@/lib/theme';
 import type { Order, ShopSettings } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 /** Screen 8 · Download Word labels. */
 export default function Labels() {
@@ -41,7 +42,9 @@ export default function Labels() {
     try {
       const f = await apiFile('POST', '/labels', { orderIds: ids, markPrinted });
       await saveFile(f.name, f.bytes);
-      setMsg({ kind: 'ok', text: `Downloaded ${f.name} · ${f.pages} page${f.pages === 1 ? '' : 's'}${markPrinted ? ' · orders marked printed' : ''}` });
+      setMsg({ kind: 'ok', text: [t('Downloaded {name}', { name: f.name }), t(f.pages === 1 ? '{n} page' : '{n} pages', { n: f.pages }), markPrinted ? t('orders marked printed') : '']
+          .filter(Boolean)
+          .join(' · ') });
       setSelection([]);
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['stats'] });
@@ -71,19 +74,19 @@ export default function Labels() {
   const done = msg?.kind === 'ok';
 
   return (
-    <Page title="Download labels">
+    <Page title={t('Download labels')}>
       <Pressable onPress={back} style={{ marginBottom: 10 }}>
-        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>‹ Back to orders</Text>
+        <Text style={{ color: C.action, fontSize: 15, fontWeight: '600' }}>{t('‹ Back to orders')}</Text>
       </Pressable>
       {n === 0 && !done ? (
-        <Banner kind="info" text="No orders selected. Go to Orders, tick the orders and tap Download Word." />
+        <Banner kind="info" text={t('No orders selected. Go to Orders, tick the orders and tap Download Word.')} />
       ) : (
         <>
           <View style={{ backgroundColor: C.tint, borderRadius: R.card, padding: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: C.action }}>
-              {n} orders → {pages} A4 page{pages === 1 ? '' : 's'}
+              {t('{n} orders → {p}', { n, p: t(pages === 1 ? '{n} A4 page' : '{n} A4 pages', { n: pages }) })}
             </Text>
-            <Text style={{ color: C.action }}>2 labels per page</Text>
+            <Text style={{ color: C.action }}>{t('2 labels per page')}</Text>
           </View>
           {shop.data ? (
             <Row gap={12} style={{ marginBottom: 14 }}>
@@ -91,40 +94,42 @@ export default function Labels() {
               {n > 2 ? <PagePreview labels={[previewOrders[2], previewOrders[3]]} shop={shop.data} /> : <View style={{ flex: 1 }} />}
             </Row>
           ) : null}
-          {n > 4 ? <Muted style={{ textAlign: 'center', marginTop: -6, marginBottom: 12 }}>Showing the first 2 pages of {pages}.</Muted> : null}
+          {n > 4 ? <Muted style={{ textAlign: 'center', marginTop: -6, marginBottom: 12 }}>{t('Showing the first 2 pages of {p}.', { p: pages })}</Muted> : null}
           <Card style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 16, color: C.text }}>Mark these orders as printed</Text>
+            <Text style={{ fontSize: 16, color: C.text }}>{t('Mark these orders as printed')}</Text>
             <Toggle value={markPrinted} onChange={setMarkPrinted} />
           </Card>
         </>
       )}
       {msg ? <Banner kind={msg.kind} text={msg.text} /> : null}
       {n > 0 && !done ? (
-        <Button title={busy === 'new' ? 'Preparing file…' : '⬇  Download Word file (.docx)'} onPress={download} loading={busy === 'new'} />
+        <Button title={busy === 'new' ? t('Preparing file…') : t('⬇  Download Word file (.docx)')} onPress={download} loading={busy === 'new'} />
       ) : null}
 
-      <SectionTitle>Earlier downloads</SectionTitle>
+      <SectionTitle>{t('Earlier downloads')}</SectionTitle>
       <Card style={{ padding: 0 }}>
         {(batches.data?.batches ?? []).length === 0 ? (
           <View style={{ padding: 16 }}>
-            <Muted>None yet.</Muted>
+            <Muted>{t('None yet.')}</Muted>
           </View>
         ) : (
           batches.data!.batches.map((b, i, arr) => (
             <ListRow key={b.id} last={i === arr.length - 1} onPress={canReprint ? () => again(b.id) : undefined}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 15, color: C.text }}>{dayTime(b.created_at)}</Text>
-                <Muted style={{ fontSize: 13 }}>by {b.created_by_name}</Muted>
+                <Muted style={{ fontSize: 13 }}>{t('by {name}', { name: b.created_by_name })}</Muted>
               </View>
               <Muted>
-                {busy === b.id ? 'Preparing…' : `${b.order_count} order${b.order_count === 1 ? '' : 's'} · ${b.page_count} page${b.page_count === 1 ? '' : 's'}`}
+                {busy === b.id
+                  ? t('Preparing…')
+                  : `${t(b.order_count === 1 ? '{n} order' : '{n} orders', { n: b.order_count })} · ${t(b.page_count === 1 ? '{n} page' : '{n} pages', { n: b.page_count })}`}
                 {canReprint && busy !== b.id ? '  ⬇' : ''}
               </Muted>
             </ListRow>
           ))
         )}
       </Card>
-      {!canReprint ? <Muted style={{ textAlign: 'center' }}>Only the owner can download an earlier file again.</Muted> : null}
+      {!canReprint ? <Muted style={{ textAlign: 'center' }}>{t('Only the owner can download an earlier file again.')}</Muted> : null}
     </Page>
   );
 }

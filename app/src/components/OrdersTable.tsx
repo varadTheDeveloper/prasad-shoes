@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { C } from '@/lib/theme';
 import { dateTime } from '@/lib/format';
 import type { Order } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 const ROW = 46;
 const COLS = [
@@ -54,7 +55,7 @@ export function OrdersTable({
         <View style={[st.row, st.head]}>
           {COLS.map((c) => (
             <Text key={c.key} style={[st.cell, st.headText, { width: w(c.w) }]}>
-              {c.title}
+              {t(c.title)}
             </Text>
           ))}
         </View>
@@ -84,14 +85,14 @@ export function OrdersTable({
             </Pressable>
           )}
           ListEmptyComponent={
-            loading ? <ActivityIndicator color={C.action} style={{ padding: 30 }} /> : <Text style={st.empty}>No orders for this filter.</Text>
+            loading ? <ActivityIndicator color={C.action} style={{ padding: 30 }} /> : <Text style={st.empty}>{t('No orders for this filter.')}</Text>
           }
           ListFooterComponent={
             total > 0 ? (
               <View style={{ padding: 14 }}>
                 {loadingMore ? <ActivityIndicator color={C.action} /> : null}
                 <Text style={st.empty}>
-                  Showing {orders.length} of {total} · <Text style={{ color: C.ok }}>●</Text> printed <Text style={{ color: C.warn }}>●</Text> not printed
+                  {t('Showing {a} of {b}', { a: orders.length, b: total })} · <Text style={{ color: C.ok }}>●</Text> {t('printed')} <Text style={{ color: C.warn }}>●</Text> {t('not printed')}
                 </Text>
               </View>
             ) : undefined

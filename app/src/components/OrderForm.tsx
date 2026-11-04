@@ -8,6 +8,7 @@ import { DEFAULT_PAYMENT, FEATURES, effectivePayment } from '@shared/features';
 import { COD_FIXED, isIsoDate } from '@shared/cod';
 import { todayISO } from '@/lib/format';
 import { C } from '@/lib/theme';
+import { t } from '@/lib/i18n';
 
 export interface FormState {
   ship_name: string;
@@ -128,21 +129,21 @@ export function formToLabel(f: FormState): LabelOrder {
 /** Quick checks in the app (BRD ORD-06). The server checks the same rules again. */
 export function validate(f: FormState, showAmount: boolean): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!f.ship_name.trim()) e.ship_name = 'Enter name';
-  if (!f.address.trim()) e.address = 'Enter address';
-  if (!/^[1-9]\d{5}$/.test(f.pincode.replace(/\s/g, ''))) e.pincode = '6 digits, not starting with 0';
+  if (!f.ship_name.trim()) e.ship_name = t('Enter name');
+  if (!f.address.trim()) e.address = t('Enter address');
+  if (!/^[1-9]\d{5}$/.test(f.pincode.replace(/\s/g, ''))) e.pincode = t('6 digits, not starting with 0');
   const m1 = f.mobile1.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
-  if (!/^\d{10}$/.test(m1)) e.mobile1 = 'Enter 10 digits';
+  if (!/^\d{10}$/.test(m1)) e.mobile1 = t('Enter 10 digits');
   if (f.mobile2.trim()) {
     const m2 = f.mobile2.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
-    if (!/^\d{10}$/.test(m2)) e.mobile2 = 'Enter 10 digits';
-    else if (m2 === m1) e.mobile2 = 'Same as Mobile 1 – leave empty or enter another number';
+    if (!/^\d{10}$/.test(m2)) e.mobile2 = t('Enter 10 digits');
+    else if (m2 === m1) e.mobile2 = t('Same as Mobile 1 – leave empty or enter another number');
   }
   const amt = f.amount.replace(/[,₹\s]/g, '');
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
-  if (showAmount && amt && !(Number(amt) >= 0)) e.amount = 'Enter a number, e.g. 1299';
-  if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = 'Enter COD amount';
-  if (f.payment_type === 'COD' && f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = 'Pick a booking date';
+  if (showAmount && amt && !(Number(amt) >= 0)) e.amount = t('Enter a number, e.g. 1299');
+  if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = t('Enter COD amount');
+  if (f.payment_type === 'COD' && f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = t('Pick a booking date');
   return e;
 }
 
@@ -175,81 +176,83 @@ export function OrderForm({
   return (
     <View>
       {FEATURES.cod && typePicker ? (
-        <Field label="Shipment type">
+        <Field label={t('Shipment type')}>
           <TypeButtons value={f.payment_type} onChange={(v) => onChange('payment_type', v)} />
         </Field>
       ) : null}
       {f.payment_type === 'COD' ? (
         <View style={{ borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: 4, marginBottom: 12 }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>COD details</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 }}>{t('COD details')}</Text>
           <Text style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
-            Prints on every COD label: Booking Under {COD_FIXED.bookingUnder} · Customer ID {COD_FIXED.customerId} · Contract ID{' '}
-            {COD_FIXED.contractId} · {COD_FIXED.hub}. From is always the shop. Size + Note print as “COD 1999 (Size 8 …)”.
+            {t(
+              'Prints on every COD label: Booking Under {a} · Customer ID {b} · Contract ID {c} · {d}. From is always the shop. Size + Note print as “COD 1999 (Size 8 …)”.',
+              { a: COD_FIXED.bookingUnder, b: COD_FIXED.customerId, c: COD_FIXED.contractId, d: COD_FIXED.hub },
+            )}
           </Text>
           <Row>
             {showAmount ? (
-              <Field label="COD amount (₹)" required error={errors.amount} style={half}>
+              <Field label={t('COD amount (₹)')} required error={errors.amount} style={half}>
                 {input('amount', { keyboardType: 'decimal-pad', placeholder: '1299' })}
               </Field>
             ) : (
               <View style={half} />
             )}
-            <Field label="Weight" error={errors.weight} style={half}>
-              {input('weight', { placeholder: 'e.g. 800 g' })}
+            <Field label={t('Weight')} error={errors.weight} style={half}>
+              {input('weight', { placeholder: t('e.g. 800 g') })}
             </Field>
           </Row>
-          <Field label="Booking date" error={errors.booking_date}>
+          <Field label={t('Booking date')} error={errors.booking_date}>
             <View style={hl('booking_date') ? { borderRadius: 8, backgroundColor: C.tint } : undefined}>
-              <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder="Pick date" />
+              <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder={t('Pick date')} />
             </View>
           </Field>
         </View>
       ) : null}
       <Row>
-        <Field label="Product name (optional)" error={errors.product_name} style={half}>
-          {input('product_name', { placeholder: 'e.g. Kolhapuri Kurundwad' })}
+        <Field label={t('Product name (optional)')} error={errors.product_name} style={half}>
+          {input('product_name', { placeholder: t('e.g. Kolhapuri Kurundwad') })}
         </Field>
-        <Field label="Size" error={errors.size} style={half}>
-          {input('size', { placeholder: 'e.g. 9' })}
+        <Field label={t('Size')} error={errors.size} style={half}>
+          {input('size', { placeholder: t('e.g. 9') })}
         </Field>
       </Row>
-      <Field label="Name" required error={errors.ship_name}>
+      <Field label={t('Name')} required error={errors.ship_name}>
         {input('ship_name', { autoCapitalize: 'words' })}
       </Field>
-      <Field label="Address" required error={errors.address}>
+      <Field label={t('Address')} required error={errors.address}>
         {input('address', { multiline: true, style: { minHeight: 64, paddingTop: 12, textAlignVertical: 'top' } })}
       </Field>
-      <Field label="Landmark" error={errors.landmark}>
-        {input('landmark', { placeholder: 'Near school / road / chowk' })}
+      <Field label={t('Landmark')} error={errors.landmark}>
+        {input('landmark', { placeholder: t('Near school / road / chowk') })}
       </Field>
       <Row>
-        <Field label="Pincode" required error={errors.pincode} style={half}>
+        <Field label={t('Pincode')} required error={errors.pincode} style={half}>
           {input('pincode', { keyboardType: 'number-pad', maxLength: 7 })}
         </Field>
-        <Field label="Mobile 1" required error={errors.mobile1} style={half}>
+        <Field label={t('Mobile 1')} required error={errors.mobile1} style={half}>
           {input('mobile1', { keyboardType: 'phone-pad', maxLength: 14 })}
         </Field>
       </Row>
       <Row>
-        <Field label="District" error={errors.district} style={half}>
+        <Field label={t('District')} error={errors.district} style={half}>
           {input('district')}
         </Field>
-        <Field label="State" error={errors.state} style={half}>
+        <Field label={t('State')} error={errors.state} style={half}>
           {input('state')}
         </Field>
       </Row>
       <Row>
-        <Field label="Mobile 2" error={errors.mobile2} style={half}>
-          {input('mobile2', { keyboardType: 'phone-pad', placeholder: 'Optional', maxLength: 14 })}
+        <Field label={t('Mobile 2')} error={errors.mobile2} style={half}>
+          {input('mobile2', { keyboardType: 'phone-pad', placeholder: t('Optional'), maxLength: 14 })}
         </Field>
-        <Field label="Note (optional)" error={errors.note} style={half}>
-          {input('note', { placeholder: 'e.g. RED' })}
+        <Field label={t('Note (optional)')} error={errors.note} style={half}>
+          {input('note', { placeholder: t('e.g. RED') })}
         </Field>
       </Row>
       {f.payment_type !== 'COD' && showAmount ? (
         <Row>
-          <Field label="Amount (₹, optional)" error={errors.amount} style={half}>
-            {input('amount', { keyboardType: 'decimal-pad', placeholder: 'Optional' })}
+          <Field label={t('Amount (₹, optional)')} error={errors.amount} style={half}>
+            {input('amount', { keyboardType: 'decimal-pad', placeholder: t('Optional') })}
           </Field>
           <View style={half} />
         </Row>
@@ -263,7 +266,7 @@ export function TypeButtons({ value, onChange }: { value: PaymentType; onChange:
   return (
     <Segmented
       options={[
-        { value: 'PREPAID', label: 'Prepaid' },
+        { value: 'PREPAID', label: t('Prepaid') },
         { value: 'COD', label: 'COD' },
       ]}
       value={value}

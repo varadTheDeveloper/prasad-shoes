@@ -18,10 +18,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, MAX_W, R } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
+import { useLang, type Lang } from '@/lib/i18n';
 
 // ----------------------------------------------------------------- page frame
 export function Header({ title, right }: { title: string; right?: ReactNode }) {
   const { me } = useAuth();
+  useLang();
   const insets = useSafeAreaInsets();
   return (
     <View style={[s.header, { paddingTop: insets.top + 14 }]}>
@@ -36,9 +38,28 @@ export function Header({ title, right }: { title: string; right?: ReactNode }) {
 }
 
 export function RoleBadge({ role }: { role: string }) {
+  const { t } = useLang();
   return (
     <View style={s.roleBadge}>
-      <Text style={s.roleBadgeText}>{role}</Text>
+      <Text style={s.roleBadgeText}>{t(role)}</Text>
+    </View>
+  );
+}
+
+/** English | मराठी – remembered on this phone / browser. */
+export function LangSwitch({ style }: { style?: StyleProp<ViewStyle> }) {
+  const { lang, setLang, t } = useLang();
+  return (
+    <View style={style}>
+      <Text style={s.label}>{t('Language')} / Language</Text>
+      <Segmented<Lang>
+        options={[
+          { value: 'en', label: 'English' },
+          { value: 'mr', label: 'मराठी' },
+        ]}
+        value={lang}
+        onChange={setLang}
+      />
     </View>
   );
 }

@@ -1,9 +1,10 @@
 // Website: the browser's own date box. Value is 'YYYY-MM-DD' ('' = any date).
+import { t } from '@/lib/i18n';
 import { createElement } from 'react';
 import { Text, View } from 'react-native';
 import { C, R } from '@/lib/theme';
 
-export function DateField({ label, value, onChange, min, max, placeholder = 'Any date' }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string; placeholder?: string }) {
+export function DateField({ label, value, onChange, min, max, placeholder = t('Any date') }: { label: string; value: string; onChange: (v: string) => void; min?: string; max?: string; placeholder?: string }) {
   return (
     <View style={{ flex: 1 }}>
       {label ? <Text style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>{label}</Text> : null}

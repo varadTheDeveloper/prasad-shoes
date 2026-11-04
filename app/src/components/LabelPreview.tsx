@@ -4,6 +4,7 @@ import { codHeadLines, codOrderLine, fromLines, orderLine, toLines, type LabelOr
 import type { ShopSettings } from '@shared/types';
 import { api } from '@/lib/api';
 import { C } from '@/lib/theme';
+import { t } from '@/lib/i18n';
 
 /** Every line of a COD label, top to bottom, as the Word file prints it (From = the shop). */
 function codRows(o: LabelOrder, shop: LabelShop | null) {
@@ -43,7 +44,7 @@ export function PagePreview({ labels, shop, scale = 1 }: { labels: (LabelOrder |
                 </View>
               </>
             ) : (
-              <Text style={[st.t, { fontSize: f(6), color: C.placeholder, textAlign: 'center', marginTop: f(40) }]}>(bottom half empty)</Text>
+              <Text style={[st.t, { fontSize: f(6), color: C.placeholder, textAlign: 'center', marginTop: f(40) }]}>{t('(bottom half empty)')}</Text>
             )}
           </View>
         );
@@ -93,14 +94,14 @@ export function ToPreview({ order }: { order: LabelOrder }) {
     const r = codRows(order, shop.data ?? null);
     return (
       <View style={st.paper}>
-        <Text style={st.paperTag}>WILL PRINT · COD</Text>
+        <Text style={st.paperTag}>{t('WILL PRINT · COD')}</Text>
         {r.head.map((l, j) => (
           <Text key={`h${j}`} style={[st.t, st.c, st.small, (j === 1 || j === 3) && st.b]}>
             {l}
           </Text>
         ))}
         {empty ? (
-          <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 12 }]}>The address appears here after you paste</Text>
+          <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 12 }]}>{t('The address appears here after you paste')}</Text>
         ) : (
           <>
             <Text style={[st.t, st.b, st.r, st.line, { marginTop: 8 }]}>TO, {order.ship_name || '—'}</Text>
@@ -123,9 +124,9 @@ export function ToPreview({ order }: { order: LabelOrder }) {
   }
   return (
     <View style={st.paper}>
-      <Text style={st.paperTag}>WILL PRINT</Text>
+      <Text style={st.paperTag}>{t('WILL PRINT')}</Text>
       {empty ? (
-        <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 18 }]}>The label appears here after you paste</Text>
+        <Text style={[st.t, { color: C.placeholder, textAlign: 'center', paddingVertical: 18 }]}>{t('The label appears here after you paste')}</Text>
       ) : (
         <View>
           <Text style={[st.t, st.b, st.r, st.line]}>TO, {order.ship_name || '—'}</Text>

@@ -5,11 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { setSelection } from '@/lib/selection';
-import { Button, Card, ListRow, Muted, Page, Pill, Row, SectionTitle, useWide } from '@/components/ui';
+import { Button, Card, LangSwitch, ListRow, Muted, Page, Pill, Row, SectionTitle, useWide } from '@/components/ui';
 import { CheckBox, PasteBox, PasteDuplicate, PasteForm, SaveBar, usePasteOrder } from '@/components/PasteOrder';
 import { dayTime, payText, shiftISO, time, todayISO } from '@/lib/format';
 import { C } from '@/lib/theme';
 import type { Order } from '@shared/types';
+import { t } from '@/lib/i18n';
 
 interface Stats {
   savedByMeToday: number;
@@ -65,10 +66,10 @@ export default function Home() {
   const strip = (
     <View style={{ marginBottom: 14 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>Namaste, {me?.name}</Text>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>{t('Namaste, {name}', { name: me?.name })}</Text>
         {d ? (
           <Muted style={{ fontSize: 14 }}>
-            {admin ? `Today ${d.ordersToday}` : `Saved by me ${d.savedByMeToday}`} · Not printed {d.notPrinted}
+            {admin ? t('Today {n}', { n: d.ordersToday }) : t('Saved by me {n}', { n: d.savedByMeToday })} · {t('Not printed {n}', { n: d.notPrinted })}
           </Muted>
         ) : null}
       </View>
@@ -77,13 +78,13 @@ export default function Home() {
           <Button
             kind="secondary"
             disabled={!toPrint.length}
-            title={toPrint.length ? `⬇  Print today’s labels (${toPrint.length})` : 'No labels to print right now'}
+            title={toPrint.length ? t('⬇  Print today’s labels ({n})', { n: toPrint.length }) : t('No labels to print right now')}
             onPress={printToday}
           />
           {olderCount > 0 ? (
             <Pressable onPress={() => router.push({ pathname: '/orders', params: { preset: 'unprinted', at: String(Date.now()) } })} hitSlop={6}>
               <Text style={{ color: C.action, fontSize: 14, fontWeight: '600', marginTop: 8 }}>
-                {olderCount} older order{olderCount === 1 ? '' : 's'} not printed – open Orders
+                {t(olderCount === 1 ? '{n} older order not printed – open Orders' : '{n} older orders not printed – open Orders', { n: olderCount })}
               </Text>
             </Pressable>
           ) : null}
@@ -96,20 +97,20 @@ export default function Home() {
     <>
       {d && admin ? (
         <>
-          <SectionTitle>Saved by staff today</SectionTitle>
+          <SectionTitle>{t('Saved by staff today')}</SectionTitle>
           <Card style={{ padding: 0 }}>
             {d.staffToday.length === 0 ? (
               <View style={{ padding: 16 }}>
-                <Muted>No orders saved yet today.</Muted>
+                <Muted>{t('No orders saved yet today.')}</Muted>
               </View>
             ) : (
               d.staffToday.map((x, i) => (
                 <ListRow key={x.id} last={i === d.staffToday.length - 1}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: C.text }}>{x.name}</Text>
-                    <Muted>Last order {time(x.last_order)}</Muted>
+                    <Muted>{t('Last order {time}', { time: time(x.last_order) })}</Muted>
                   </View>
-                  <Pill kind="info" text={`${x.orders} order${x.orders === 1 ? '' : 's'}`} />
+                  <Pill kind="info" text={t(x.orders === 1 ? '{n} order' : '{n} orders', { n: x.orders })} />
                 </ListRow>
               ))
             )}
@@ -118,11 +119,11 @@ export default function Home() {
       ) : null}
       {d && !admin ? (
         <>
-          <SectionTitle>My recent orders</SectionTitle>
+          <SectionTitle>{t('My recent orders')}</SectionTitle>
           <Card style={{ padding: 0 }}>
             {d.myRecent.length === 0 ? (
               <View style={{ padding: 16 }}>
-                <Muted>No orders yet.</Muted>
+                <Muted>{t('No orders yet.')}</Muted>
               </View>
             ) : (
               d.myRecent.map((o, i) => (
@@ -131,16 +132,17 @@ export default function Home() {
                     <Text style={{ fontSize: 16, fontWeight: '600', color: C.text }}>{o.ship_name}</Text>
                     <Muted>{[o.pincode, payText(o), dayTime(o.created_at)].filter(Boolean).join(' · ')}</Muted>
                   </View>
-                  <Pill kind={o.is_printed ? 'ok' : 'warn'} text={o.is_printed ? 'Printed' : 'Not printed'} />
+                  <Pill kind={o.is_printed ? 'ok' : 'warn'} text={o.is_printed ? t('Printed') : t('Not printed')} />
                 </ListRow>
               ))
             )}
           </Card>
         </>
       ) : null}
-      <Row style={{ justifyContent: 'center', marginTop: 24 }} gap={24}>
-        <Button kind="link" title="Change password" onPress={() => router.push('/change-password')} />
-        <Button kind="link" title="Log out" onPress={logout} />
+      <LangSwitch style={{ marginTop: 24, width: '100%', maxWidth: 320, alignSelf: 'center' }} />
+      <Row style={{ justifyContent: 'center', marginTop: 12 }} gap={24}>
+        <Button kind="link" title={t('Change password')} onPress={() => router.push('/change-password')} />
+        <Button kind="link" title={t('Log out')} onPress={logout} />
       </Row>
     </>
   );
@@ -148,7 +150,7 @@ export default function Home() {
   if (!canCreate) {
     // Someone who cannot add orders: just the numbers and the print button.
     return (
-      <Page title="Home">
+      <Page title={t('Home')}>
         {strip}
         {below}
       </Page>
@@ -157,7 +159,7 @@ export default function Home() {
 
   const started = !!(s.raw || s.form.ship_name);
   return (
-    <Page title="Home" wide={wide} footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}>
+    <Page title={t('Home')} wide={wide} footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}>
       {strip}
       {wide ? (
         <Row gap={18} style={{ alignItems: 'flex-start' }}>
@@ -176,7 +178,7 @@ export default function Home() {
             <>
               <CheckBox s={s} />
               <View style={{ borderTopWidth: 1, borderTopColor: C.border, marginTop: 4, paddingTop: 14 }}>
-                <Muted style={{ marginBottom: 10 }}>Fix anything below – the label above changes with it.</Muted>
+                <Muted style={{ marginBottom: 10 }}>{t('Fix anything below – the label above changes with it.')}</Muted>
                 <PasteForm s={s} />
               </View>
             </>

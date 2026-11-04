@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getToken } from './storage';
+import { t } from './i18n';
 
 /**
  * Website: same server as the page ('' = /api on this domain).
@@ -48,7 +49,7 @@ async function request(method: string, path: string, body?: unknown, timeoutMs =
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, 'NETWORK', `Server not reachable (${API_URL || 'same website'}). Check the internet and that the server is running.`);
+    throw new ApiError(0, 'NETWORK', t(`Server not reachable (${API_URL || 'same website'}). Check the internet and that the server is running.`));
   } finally {
     clearTimeout(timer);
   }
@@ -59,7 +60,9 @@ async function request(method: string, path: string, body?: unknown, timeoutMs =
     } catch {}
     const e = data?.error ?? {};
     const { code, message, fields, ...extra } = e;
-    const err = new ApiError(res.status, code ?? 'SERVER', message ?? `Server error (${res.status})`, fields ?? {}, extra);
+    // Messages and field notes in the app's language (lib/i18n.tsx; English when not listed there).
+    const trFields = Object.fromEntries(Object.entries((fields ?? {}) as Record<string, string>).map(([k, v]) => [k, t(String(v))]));
+    const err = new ApiError(res.status, code ?? 'SERVER', t(message ?? `Server error (${res.status})`), trFields, extra);
     if (res.status === 401 || code === 'PASSWORD_CHANGE_REQUIRED') {
       if (!path.startsWith('/auth/login')) onAuthError(err);
     }

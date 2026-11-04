@@ -295,14 +295,23 @@ test('Select all: /orders/ids returns every matching order (not just one page); 
   assert.equal(sIds.data.ids.length, notPrinted.data.total); // staff: printed ones left out
 });
 
-test('Excel export (CSV): owner gets every matching order, staff cannot', { skip }, async () => {
+test('Excel export (.xlsx): owner gets every matching order with all details, staff cannot', { skip }, async () => {
   const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const r = await call('GET', `/orders/export?from=${day}&to=${day}`, undefined, owner);
   assert.equal(r.status, 200);
-  const text = Buffer.from(r.data).toString('utf8');
-  assert.ok(text.startsWith('\ufeffDate,Customer,Address'));
+  const buf = Buffer.from(r.data);
+  assert.equal(buf.subarray(0, 2).toString(), 'PK'); // a zip = real .xlsx
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(buf);
+  const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
+  for (const h of ['Order #', 'Date', 'Customer', 'Mobile 1', 'Product', 'Size', 'Note', 'Amount', 'Weight', 'Booking date'])
+    assert.ok(sheet.includes(`>${h}<`), h);
+  assert.ok(sheet.includes('<cols>') && sheet.includes('state="frozen"'));
   const list = await call('GET', `/orders?from=${day}&to=${day}&limit=1`, undefined, owner);
-  assert.equal(text.trim().split('\r\n').length - 1, list.data.total);
+  assert.equal((sheet.match(/<row /g) ?? []).length - 1, list.data.total);
+  // mobile numbers are text, never numbers (no 9E+09)
+  const o = list.data.orders[0];
+  assert.ok(sheet.includes(`t="inlineStr"><is><t xml:space="preserve">${o.mobile1}</t>`));
   assert.equal((await call('GET', `/orders/export?from=${day}&to=${day}`, undefined, staff)).status, 403);
 });
 

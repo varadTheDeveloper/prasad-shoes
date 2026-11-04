@@ -12,7 +12,7 @@ Owner (Varad) wants things explained in simple language, and the plan explained 
   `src/services/docx.ts`, India Post pincode check in `src/services/pincode.ts` + `data/pincodes.json`.
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
 - `app/` – Expo SDK 58 (Expo Router, TanStack Query): Android APK + website from the same code.
-  Home = paste screen; Orders = List (print) / Table (owner, Excel CSV export).
+  Home = paste screen; Orders = List (print) / Table (owner, Excel .xlsx export: `services/xlsx.ts`, all details, mobiles as text).
 - `deploy/` – AWS server scripts (written for Lightsail, used on EC2): `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
 
 ## Run on the PC (Windows)

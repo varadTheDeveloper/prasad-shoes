@@ -5,6 +5,7 @@ import { q, tx } from '../db';
 import { HttpError, forbidden, h, notFound } from '../errors';
 import { can, requireAdmin, requirePermission, type AuthUser } from '../middleware/auth';
 import { audit } from '../services/audit';
+import { buildXlsx, type Column } from '../services/xlsx';
 import { normaliseForHash, normaliseMobile } from '../../../shared/parser';
 import { DEFAULT_PAYMENT, effectivePayment } from '../../../shared/features';
 import { isIsoDate } from '../../../shared/cod';
@@ -244,11 +245,29 @@ r.get(
   }),
 );
 
-// GET /api/orders/export?<same filters> -> CSV (opens in Excel) of every matching order. Owner only.
-const csv = (v: unknown) => {
-  const t = v === null || v === undefined ? '' : String(v);
-  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-};
+// GET /api/orders/export?<same filters> -> Excel file (.xlsx) of every matching order. Owner only.
+// Real .xlsx (not CSV): column widths are set (no ######), mobiles / pincodes stay text (no 9E+09).
+const EXPORT_COLS: Column[] = [
+  { head: 'Order #', width: 9 },
+  { head: 'Date', width: 19 },
+  { head: 'Customer', width: 24 },
+  { head: 'Address', width: 48, wrap: true },
+  { head: 'Landmark', width: 22, wrap: true },
+  { head: 'District', width: 16 },
+  { head: 'State', width: 16 },
+  { head: 'Pincode', width: 10 },
+  { head: 'Mobile 1', width: 13 },
+  { head: 'Mobile 2', width: 13 },
+  { head: 'Product', width: 22, wrap: true },
+  { head: 'Size', width: 8 },
+  { head: 'Note', width: 24, wrap: true },
+  { head: 'Type', width: 9 },
+  { head: 'Amount', width: 10 },
+  { head: 'Weight', width: 9 },
+  { head: 'Booking date', width: 13 },
+  { head: 'Added by', width: 16 },
+  { head: 'Printed', width: 9 },
+];
 r.get(
   '/export',
   requireAdmin,
@@ -256,26 +275,42 @@ r.get(
     const f = listQuery.parse(req.query);
     const { w, p } = listWhere(f, req.user);
     const { rows } = await q(
-      `SELECT to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-Mon-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
-              o.district, o.state, o.pincode, o.mobile1, o.mobile2, cu.name AS added_by, o.is_printed, o.payment_type,
-              CASE WHEN o.payment_type = 'COD' THEN o.amount END AS cod_amount
+      `SELECT o.id, to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
+              o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note, o.payment_type,
+              o.amount::float8 AS amount, o.weight, to_char(o.booking_date, 'DD-MM-YYYY') AS booking_date,
+              cu.name AS added_by, o.is_printed
          FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
         ORDER BY o.created_at DESC, o.id DESC LIMIT 50000`,
       p,
     );
-    const head = ['Date', 'Customer', 'Address', 'Landmark', 'District', 'State', 'Pincode', 'Mobile 1', 'Mobile 2', 'Added by', 'Printed', 'Type', 'COD amount'];
-    const lines = rows.map((r) =>
-      [r.date, r.ship_name, r.address, r.landmark, r.district, r.state, r.pincode, r.mobile1, r.mobile2, r.added_by, r.is_printed ? 'Yes' : 'No',
-        r.payment_type === 'COD' ? 'COD' : 'Prepaid', r.cod_amount]
-        .map(csv)
-        .join(','),
-    );
-    const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const data = rows.map((r) => [
+      r.id,
+      r.date,
+      r.ship_name,
+      r.address,
+      r.landmark,
+      r.district,
+      r.state,
+      r.pincode,
+      r.mobile1,
+      r.mobile2,
+      r.product_name,
+      r.size,
+      r.note,
+      r.payment_type === 'COD' ? 'COD' : 'Prepaid',
+      r.amount === null ? null : Number(r.amount),
+      r.weight,
+      r.booking_date,
+      r.added_by,
+      r.is_printed ? 'Yes' : 'No',
+    ]);
+    const file = await buildXlsx('Orders', EXPORT_COLS, data);
+    const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('X-File-Name', name);
     res.setHeader('Access-Control-Expose-Headers', 'X-File-Name, Content-Disposition');
-    res.send('\ufeff' + [head.join(','), ...lines].join('\r\n')); // BOM: Excel shows Marathi / Hindi correctly
+    res.send(file);
   }),
 );
 

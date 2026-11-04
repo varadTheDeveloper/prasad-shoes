@@ -48,10 +48,10 @@ export function RoleBadge({ role }: { role: string }) {
 
 /** English | मराठी – remembered on this phone / browser. */
 export function LangSwitch({ style }: { style?: StyleProp<ViewStyle> }) {
-  const { lang, setLang, t } = useLang();
+  const { lang, setLang } = useLang();
   return (
     <View style={style}>
-      <Text style={s.label}>{t('Language')} / Language</Text>
+      <Text style={s.label}>भाषा / Language</Text>
       <Segmented<Lang>
         options={[
           { value: 'en', label: 'English' },

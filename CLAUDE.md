@@ -31,10 +31,14 @@ $env:API_URL="http://localhost:3000"; $env:OWNER_MOBILE="7020861805"; $env:OWNER
 cd app; npx tsc --noEmit
 ```
 
-## Live setup (as of 2 Nov 2026)
-- Server: **AWS EC2**, Mumbai (ap-south-1), Ubuntu 24.04, 20 GB disk, Elastic IP **65.2.112.70** (new on 2 Nov 2026 – the old 13.203.156.41 was released; old APKs point to it and stop working).
-  Security group: 22, 80, 443 only (PostgreSQL 5432 stays closed). Login user `ubuntu`, key `prasad-key` (.pem, not in Git).
-- Website + API: **https://65-2-112-70.sslip.io** (free sslip.io name + Let's Encrypt, renews itself).
+## Live setup (as of 4 Nov 2026)
+- Server: **Oracle Cloud free-server-2** (Always Free VM.Standard.E2.1.Micro: 1 GB RAM + 2 GB swap), Hyderabad (ap-hyderabad-1),
+  Ubuntu 24.04, 47 GB disk, **reserved** public IP **144.24.139.223** (fixed). Moved from AWS EC2 on 4 Nov 2026.
+  Oracle security list: 22, 80, 443 only; Ubuntu's own iptables also opens 80/443 (no ufw on Oracle). Login user `ubuntu`, SSH key not in Git.
+  Free tier: Oracle may *stop* (not delete) the server after 7 idle days – just Start it again in the console (IP stays, it is reserved).
+- Website + API: **https://144-24-139-223.sslip.io** (free sslip.io name + Let's Encrypt, renews itself).
+- Old AWS EC2 (Elastic IP 65.2.112.70): API stopped; its nginx only forwards `/api` to Oracle so old APKs keep working.
+  Kept about one week as a fallback (nginx backup `~/nginx-before-oracle.bak`), then shut down + Elastic IP released.
   Health check: `/api/health`. API runs under PM2 as `prasad-api`; code in `/opt/prasad-shoes`, website in `/var/www/prasad-shoes`.
 - Database: PostgreSQL 16 on the same server, db `prasad_shoes`, users `ps_owner` (migrations) / `ps_app` (API).
   Passwords only in `~/prasad-shoes-db-credentials.txt` and `/opt/prasad-shoes/server/.env` on the server – never print or commit them.
@@ -51,12 +55,12 @@ rm -rf /tmp/ps-release && mkdir -p /tmp/ps-release && cp -r ../server ../shared 
 rm -rf /tmp/ps-release/server/node_modules /tmp/ps-release/server/.env
 bash ~/prasad-shoes/deploy/release.sh /tmp/ps-release          # build API, run migrations, restart PM2, publish website
 ```
-(Alternative from Windows: `deploy\upload.ps1 -Server ubuntu@65.2.112.70`, see docs/GUIDE.md.)
+(Alternative from Windows: `deploy\upload.ps1 -Server ubuntu@144.24.139.223`, see docs/GUIDE.md.)
 Owner login (re)set: `cd /opt/prasad-shoes/server && npm run seed -- --name Owner --mobile 7020861805 --password "<strong>"`.
 
 ## New APK (only when screens change)
 On the PC: commit + push, then in `app`: `npx eas-cli@latest build --platform android --profile apk`.
-`app/eas.json` already points the APK to `https://65-2-112-70.sslip.io` (must be https).
+`app/eas.json` already points the APK to `https://144-24-139-223.sslip.io` (must be https).
 Server-only changes do not need a new APK.
 
 ## Rules – don't break these

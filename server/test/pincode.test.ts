@@ -80,3 +80,51 @@ test('no District field but the address names another district: reported too (Ra
   assert.deepEqual(r.mismatch, { district: { typed: 'Latur', pincode: 'Osmanabad', inAddress: true } });
   assert.deepEqual(checkPincode({ pincode: '413517', address: 'Patil Bunglow, Udgir, Latur' }).mismatch, {});
 });
+
+// ---- Names India Post writes differently, and the customer's town in the District box (Nov 2026) ----
+const noAsk = (pincode: string, district: string, state: string) =>
+  assert.deepEqual(checkPincode({ pincode, district, state }).mismatch, {}, `${pincode} "${district}" / "${state}" should not ask`);
+const asks = (pincode: string, district: string, state = '') =>
+  assert.ok(checkPincode({ pincode, district, state }).mismatch.district, `${pincode} "${district}" should ask`);
+
+test('Delhi: "North / South / East / West / Central Delhi" match India Post\'s "North", "South" …', () => {
+  noAsk('110033', 'North Delhi', 'Delhi');
+  noAsk('110080', 'South Delhi', 'Delhi'); // Sangam Vihar (shop's example)
+  noAsk('110016', 'South Delhi', 'Delhi');
+  noAsk('110091', 'East Delhi', 'Delhi');
+  noAsk('110008', 'West Delhi', 'Delhi');
+  noAsk('110002', 'Central Delhi', 'Delhi');
+  noAsk('110034', 'North West Delhi', 'Delhi');
+  asks('110016', 'North Delhi'); // a South Delhi pincode
+});
+
+test('Goa, Ladakh, Sikkim, Puducherry, Mohali, Noida, East Singhbhum: the names customers use', () => {
+  noAsk('403001', 'Goa', 'Goa');
+  noAsk('194101', 'Leh', 'Ladakh');
+  noAsk('194101', 'Ladakh', 'Ladakh');
+  noAsk('737101', 'East Sikkim', 'Sikkim');
+  noAsk('605001', 'Puducherry', 'Puducherry');
+  noAsk('140103', 'Mohali', 'Punjab');
+  noAsk('201301', 'Noida', 'Uttar Pradesh');
+  noAsk('831001', 'East Singhbhum', 'Jharkhand');
+  noAsk('500037', 'Hyderabad', 'Telangana'); // Medchal Malkajgiri pincode
+  noAsk('400601', 'Navi Mumbai', 'Maharashtra');
+  noAsk('396210', 'Daman', 'Daman and Diu'); // merged UT since 2020
+  asks('403001', 'South Goa'); // a North Goa pincode
+});
+
+test('town written in the District box: fine when that post office is in the pincode\'s district', () => {
+  noAsk('416115', 'Ichalkaranji', 'Maharashtra');
+  noAsk('416115', 'Ichalkaranji, Kolhapur', 'Maharashtra');
+  noAsk('403001', 'Panaji', 'Goa');
+  noAsk('403601', 'Margao City', 'Goa');
+  noAsk('737101', 'Gangtok', 'Sikkim');
+  noAsk('831001', 'Jamshedpur', 'Jharkhand');
+  noAsk('401202', 'Vasai', 'Maharashtra');
+  noAsk('421301', 'Kalyan', 'Maharashtra');
+  noAsk('410206', 'Panvel', 'Maharashtra');
+  // real mismatches still ask
+  asks('416115', 'Satara');
+  asks('416115', 'Ichalkaranji, Satara');
+  asks('415001', 'Latur');
+});

@@ -145,7 +145,65 @@ const ALIASES: Record<string, string[]> = {
   yavatmal: ['यवतमाळ'],
 };
 
+// Names customers use for a district whose India Post name is different or too short to match on its
+// own ("SOUTH" in Delhi, "EAST DISTRICT" in Sikkim). Keyed by the district name exactly as in the list.
+// These are allowed even when short ("leh") or a plain direction ("south delhi" is not "south").
+const DISTRICT_NAMES: Record<string, string[]> = {
+  // Delhi: India Post leaves out the word "Delhi"
+  NORTH: ['north delhi'],
+  SOUTH: ['south delhi'],
+  EAST: ['east delhi'],
+  WEST: ['west delhi'],
+  CENTRAL: ['central delhi'],
+  'NORTH EAST': ['north east delhi', 'northeast delhi'],
+  'NORTH WEST': ['north west delhi', 'northwest delhi'],
+  'SOUTH EAST': ['south east delhi', 'southeast delhi'],
+  'SOUTH WEST': ['south west delhi', 'southwest delhi'],
+  // Goa: customers often write just "Goa"
+  'NORTH GOA': ['goa'],
+  'SOUTH GOA': ['goa'],
+  // Ladakh
+  'LEH LADAKH': ['leh', 'ladakh'],
+  KARGIL: ['ladakh'],
+  // Sikkim: "EAST DISTRICT" etc.
+  'EAST DISTRICT': ['east sikkim', 'gangtok'],
+  'NORTH DISTRICT': ['north sikkim', 'mangan'],
+  'SOUTH DISTRICT': ['south sikkim', 'namchi'],
+  'WEST DISTRICT': ['west sikkim', 'gyalshing', 'geyzing'],
+  // New names / spellings / the city people say
+  PONDICHERRY: ['puducherry'],
+  'EAST SINGHBUM': ['east singhbhum', 'purbi singhbhum', 'jamshedpur'],
+  'WEST SINGHBHUM': ['west singhbum', 'pashchimi singhbhum', 'chaibasa'],
+  'S.A.S NAGAR': ['mohali', 'sas nagar', 'sahibzada ajit singh nagar'],
+  'GAUTAM BUDDHA NAGAR': ['noida', 'greater noida', 'gb nagar'],
+  'MEDCHAL MALKAJGIRI': ['hyderabad', 'secunderabad'],
+  'RANGA REDDY': ['hyderabad', 'rangareddy'],
+  THANE: ['navi mumbai'],
+  RAIGAD: ['navi mumbai'],
+  PUNE: ['pimpri chinchwad', 'pcmc'],
+  'EAST NIMAR': ['khandwa'],
+  'EAST GODAVARI': ['kakinada'],
+  'NORTH AND MIDDLE ANDAMAN': ['andaman'],
+  'SOUTH ANDAMANS': ['andaman', 'port blair'],
+};
+
+// "Margao city", "Vasai taluka": words that are not part of the town's name.
+const PLACE_EXTRA = /\b(?:city|town|tal|taluka|tehsil|dist|district|jilha|zilla)\b/g;
+
 const STATE_ALIASES: Record<string, string[]> = {
+  'THE DADRA AND NAGAR HAVELI AND DAMAN AND DIU': [
+    'daman and diu',
+    'daman diu',
+    'dadra and nagar haveli',
+    'dadra nagar haveli',
+    'dnh',
+    'dnh and dd',
+    'daman',
+    'diu',
+    'silvassa',
+  ],
+  LADAKH: ['leh ladakh'],
+  'ANDAMAN AND NICOBAR ISLANDS': ['andaman and nicobar', 'andaman nicobar', 'andaman'],
   MAHARASHTRA: ['mh', 'maharastra', 'महाराष्ट्र'],
   'UTTAR PRADESH': ['up', 'उत्तर प्रदेश'],
   'MADHYA PRADESH': ['mp', 'मध्य प्रदेश'],
@@ -223,6 +281,14 @@ function load(): Index {
     const ds = keys.get(main);
     if (!ds) continue;
     for (const a of others) for (const dist of ds) addKey(words(a), dist);
+  }
+  for (const [dist, names] of Object.entries(DISTRICT_NAMES)) {
+    if (!districtOffices.has(dist)) continue;
+    for (const n of names) {
+      const k = words(n);
+      if (!keys.has(k)) keys.set(k, new Set());
+      keys.get(k)!.add(dist);
+    }
   }
   const states = new Map<string, string>();
   for (const st of allStates) states.set(words(st), st);
@@ -316,7 +382,18 @@ export function checkPincode(input: PinCheckInput): PinCheck {
   if (dTyped && out.districts.length === 1) {
     const dw = words(dTyped);
     const keys = [...mentions(dw), districtKey(dTyped)].filter((k) => ix.keys.has(k));
-    const ok = keys.some((k) => [...ix.keys.get(k)!].some((d) => pinDistricts.has(d)));
+    let ok = keys.some((k) => [...ix.keys.get(k)!].some((d) => pinDistricts.has(d)));
+    // The customer wrote their town instead of the district ("Ichalkaranji" for Kolhapur, "Panaji" for
+    // North Goa): fine when India Post has a post office of that name inside this pincode's district.
+    // Not when the text is the name of another district – that is a real mismatch and the app asks.
+    if (!ok && !keys.length) {
+      const places = [dTyped, ...dTyped.split(/[,/]/)].map((p) => words(p).replace(PLACE_EXTRA, ' ').replace(/\s+/g, ' ').trim());
+      ok = places.some(
+        (p) =>
+          p.replace(/\s/g, '').length >= 4 &&
+          [...nearby].some((o) => o === p || (o.startsWith(`${p} `) && !ROAD_WORDS.has(o.slice(p.length + 1).split(' ')[0]))),
+      );
+    }
     if (!ok) out.mismatch.district = { typed: dTyped, pincode: out.districts[0] };
   } else if (!dTyped && out.addressNamesOtherDistrict && out.districts.length === 1) {
     // No District field, but the address names another district ("..., Udgir, Latur" with an Osmanabad pincode).

@@ -128,3 +128,17 @@ test('town written in the District box: fine when that post office is in the pin
   asks('416115', 'Ichalkaranji, Satara');
   asks('415001', 'Latur');
 });
+
+test('District to fill: Delhi directions read "West Delhi"; a pincode in two districts fills the first', () => {
+  assert.deepEqual(checkPincode({ pincode: '110059' }).districts, ['West Delhi']);
+  assert.deepEqual(checkPincode({ pincode: '110017' }).districts, ['South Delhi']);
+  assert.deepEqual(checkPincode({ pincode: '110001' }).districts, ['New Delhi']);
+  const h = checkPincode({ pincode: '500018' });
+  assert.deepEqual(h.districts, ['Hyderabad']);
+  assert.deepEqual(h.allDistricts, ['Hyderabad', 'Medchal Malkajgiri']);
+  // either of its districts typed by the customer is fine, another district still asks
+  assert.deepEqual(checkPincode({ pincode: '500018', district: 'Medchal Malkajgiri', state: 'Telangana' }).mismatch, {});
+  assert.deepEqual(checkPincode({ pincode: '500018', district: 'Hyderabad', state: 'Telangana' }).mismatch, {});
+  assert.ok(checkPincode({ pincode: '500018', district: 'Warangal', state: 'Telangana' }).mismatch.district);
+  assert.deepEqual(checkPincode({ pincode: '110059', district: 'West Delhi', state: 'Delhi' }).mismatch, {});
+});

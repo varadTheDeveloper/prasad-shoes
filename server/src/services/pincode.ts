@@ -21,7 +21,10 @@ export interface PinCheck {
   pincode: string;
   found: boolean;
   /** District(s) of this pincode, e.g. ["Solapur"]. Empty when not found. */
+  /** The district to fill / show: one name (when India Post lists several, the first). */
   districts: string[];
+  /** Every district India Post lists for the pincode (usually just one). */
+  allDistricts: string[];
   /** State of this pincode, e.g. "Maharashtra". Empty when not found. */
   state: string;
   /** Only "pincode not in the India Post list" (red). */
@@ -343,10 +346,16 @@ function mentions(text: string): string[] {
 const hasWords = (text: string, phrase: string) => ` ${text} `.includes(` ${phrase} `);
 
 // ------------------------------------------------------------------ main check
+// Delhi's districts are named only by direction in the India Post list ("WEST", "SOUTH").
+const DELHI_DIRECTIONS = new Set(['NORTH', 'SOUTH', 'EAST', 'WEST', 'CENTRAL', 'NORTH EAST', 'NORTH WEST', 'SOUTH EAST', 'SOUTH WEST']);
+export function labelDistrict(raw: string, state?: string): string {
+  return state === 'DELHI' && DELHI_DIRECTIONS.has(raw) ? `${titleCase(raw)} Delhi` : titleCase(raw);
+}
+
 export function checkPincode(input: PinCheckInput): PinCheck {
   const ix = load();
   const pincode = (input.pincode ?? '').replace(/\s/g, '');
-  const out: PinCheck = { pincode, found: false, districts: [], state: '', warnings: [], addressNamesOtherDistrict: false, mismatch: {} };
+  const out: PinCheck = { pincode, found: false, districts: [], allDistricts: [], state: '', warnings: [], addressNamesOtherDistrict: false, mismatch: {} };
   if (!/^[1-9]\d{5}$/.test(pincode)) return out;
 
   const row = ix.pins.get(pincode);
@@ -359,7 +368,10 @@ export function checkPincode(input: PinCheckInput): PinCheck {
     return out;
   }
   out.found = true;
-  out.districts = row.districts.map(titleCase);
+  // Names as they should read on the label: Delhi's "WEST" -> "West Delhi". A pincode in two districts
+  // (500018: Hyderabad + Medchal Malkajgiri) fills the first one, so District is never left empty.
+  out.allDistricts = row.districts.map((d) => labelDistrict(d, row.states[0]));
+  out.districts = out.allDistricts.slice(0, 1);
   out.state = row.states.map(titleCase)[0] ?? '';
   const pinDistricts = new Set(row.districts);
   const districtText = out.districts.join(' / ');

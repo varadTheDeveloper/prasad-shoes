@@ -17,6 +17,7 @@ export interface PinCheck {
   pincode: string;
   found: boolean;
   districts: string[];
+  allDistricts?: string[]; // every district of the pincode (districts = the one to fill)
   state: string;
   warnings: PinWarning[];
   /** The customer wrote another district (no note shown): don't add the pincode's district. */
@@ -100,7 +101,7 @@ export function AddressNotes({
       {check?.found ? (
         <View style={[st.note, st.ok]}>
           <Text style={st.okText}>
-            {t('✓ Pincode {pin} · {place}', { pin: check.pincode, place: `${check.districts.join(' / ')}, ${check.state}` })}
+            {t('✓ Pincode {pin} · {place}', { pin: check.pincode, place: `${(check.allDistricts ?? check.districts).join(' / ')}, ${check.state}` })}
           </Text>
         </View>
       ) : null}

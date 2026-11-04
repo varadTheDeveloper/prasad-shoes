@@ -1,6 +1,7 @@
 // A small, real Excel file (.xlsx) without an extra library: an .xlsx is a zip of a few XML files.
 // Why not CSV: CSV can't hold column widths (dates show as ######) and Excel / WPS turn mobile
-// numbers into 9E+09. Here every column has a width, text stays text, numbers stay numbers.
+// numbers into 9E+09. Here every column has a width, text stays text, numbers stay numbers
+// (and Excel / WPS are told not to mark text mobiles with the green "number stored as text" corner).
 import JSZip from 'jszip';
 
 export type Cell = string | number | null | undefined;
@@ -65,6 +66,7 @@ export async function buildXlsx(sheetName: string, cols: Column[], rows: Cell[][
 <autoFilter ref="A1:${last}${rows.length + 1}"/>
 <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
 <pageSetup paperSize="9" orientation="landscape"/>
+<ignoredErrors><ignoredError sqref="A1:${last}${rows.length + 1}" numberStoredAsText="1"/></ignoredErrors>
 </worksheet>`;
   const name = esc(sheetName.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
   const zip = new JSZip();

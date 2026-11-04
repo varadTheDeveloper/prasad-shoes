@@ -11,6 +11,7 @@ import { OrdersTable } from '@/components/OrdersTable';
 import { useIsAdmin, usePermission } from '@/lib/auth';
 import { Banner, Button, Checkbox, Chip, Header, Input, Loading, Muted, useWide } from '@/components/ui';
 import { DateField } from '@/components/DateField';
+import { ExcelSheet } from '@/components/ExcelSheet';
 import { payText, shiftISO, shortDateTime, todayISO } from '@/lib/format';
 import { setSelection } from '@/lib/selection';
 import { pagesFor } from '@shared/label';
@@ -147,15 +148,41 @@ export default function Orders() {
     });
   };
 
+  // Owner: "⬇ Excel" opens a box: Download, with a tick to also email the same file (remembered on this device).
+  const [excelOpen, setExcelOpen] = useState(false);
+  const [alsoEmail, setAlsoEmail] = useState(false);
+  useEffect(() => {
+    getPref('excel_email').then((v) => v === '1' && setAlsoEmail(true));
+  }, []);
+  const toggleEmail = () =>
+    setAlsoEmail((v) => {
+      setPref('excel_email', v ? '0' : '1');
+      return !v;
+    });
+  const dmy = (iso: string) => iso.split('-').reverse().join('-');
+  const excelRange = from || to ? `${from ? dmy(from) : t('start')} – ${to ? dmy(to) : t('today')}` : '';
+
   async function exportExcel() {
+    setExcelOpen(false);
     setExporting('busy');
+    const email = alsoEmail;
+    let msg = '';
     try {
       const f = await apiFile('GET', `/orders/export?${filterQs}`);
       await saveFile(f.name, f.bytes);
-      setExporting(t('Downloaded {name} – opens in Excel', { name: f.name }));
+      msg = t('Downloaded {name} – opens in Excel', { name: f.name });
     } catch (e) {
-      setExporting(t((e as ApiError).message));
+      msg = t((e as ApiError).message);
     }
+    if (email) {
+      try {
+        await api('POST', `/orders/export/email?${filterQs}`, { client_request_id: Crypto.randomUUID() }, 120_000);
+        msg += ' · ' + t('Sent to email ✓');
+      } catch (e) {
+        msg += ' · ' + t('Email failed: {m}', { m: t((e as ApiError).message) });
+      }
+    }
+    setExporting(msg);
   }
 
   function download() {
@@ -242,12 +269,21 @@ export default function Orders() {
               kind="secondary"
               title={exporting === 'busy' ? t('Preparing…') : `⬇ Excel (${total})`}
               loading={exporting === 'busy'}
-              onPress={exportExcel}
+              onPress={() => setExcelOpen(true)}
               style={{ paddingVertical: 8, paddingHorizontal: 14 }}
             />
           ) : null}
         </View>
         {exporting && exporting !== 'busy' ? <Muted style={{ marginTop: 8 }}>{exporting}</Muted> : null}
+        <ExcelSheet
+          visible={excelOpen}
+          count={total}
+          range={excelRange}
+          alsoEmail={alsoEmail}
+          onToggleEmail={toggleEmail}
+          onCancel={() => setExcelOpen(false)}
+          onDownload={exportExcel}
+        />
       </View>
       {olderCount > 0 ? (
         <Pressable

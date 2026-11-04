@@ -240,6 +240,42 @@ test('Send to Owner does not mark orders printed (Download Word still does)', { 
   assert.equal((await call('GET', `/orders/${id}`, undefined, owner)).data.is_printed, false);
 });
 
+// ------------------------------------------------------------------ Excel export: "Also send to email"
+const excelMail = (qs: string, token = owner, id: string = randomUUID()) =>
+  call('POST', `/orders/export/email?${qs}`, { client_request_id: id }, token);
+
+test('Excel email: staff 403, owner gets ONE email with the same .xlsx as Download', { skip }, async () => {
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const qs = `from=${day}&to=${day}`;
+  assert.equal((await excelMail(qs, staff)).status, 403);
+  assert.equal((await call('POST', `/orders/export/email?${qs}`, { client_request_id: randomUUID() })).status, 401);
+  const before = inbox.length;
+  const id = randomUUID();
+  const r = await excelMail(qs, owner, id);
+  assert.equal(r.status, 200);
+  assert.equal(inbox.length, before + 1);
+  const m = inbox[inbox.length - 1];
+  assert.deepEqual(m.to, OWNER_EMAILS); // recipient only from the server's OWNER_EMAIL
+  assert.match(m.subject, /Orders Excel/);
+  const a = attachment(m);
+  assert.equal(a.name, `orders-${day}-to-${day}.xlsx`);
+  const dl = await call('GET', `/orders/export?${qs}`, undefined, owner);
+  assert.equal(a.bytes.subarray(0, 2).toString(), 'PK');
+  assert.equal(unzip(a.bytes, 'xl/worksheets/sheet1.xml'), unzip(dl.data, 'xl/worksheets/sheet1.xml'));
+  // same request again: no second email
+  const again = await excelMail(qs, owner, id);
+  assert.equal(again.status, 200);
+  assert.equal(again.data.repeated, true);
+  assert.equal(inbox.length, before + 1);
+});
+
+test('Excel email: no orders for the filters = clear error, nothing sent', { skip }, async () => {
+  const before = inbox.length;
+  const r = await excelMail('from=2001-01-01&to=2001-01-01');
+  assert.equal(r.status, 400);
+  assert.equal(inbox.length, before);
+});
+
 test('at most 10 emails per hour per owner', { skip }, async () => {
   let last = 200;
   for (let i = 0; i < 12 && last === 200; i++) last = (await send([ids[0]])).status;

@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { q, tx } from '../db';
+import { pool, q, tx } from '../db';
 import { HttpError, forbidden, h, notFound } from '../errors';
 import { can, requireAdmin, requirePermission, type AuthUser } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { buildXlsx, type Column } from '../services/xlsx';
+import { mailReady, sendToOwner } from '../services/mailer';
 import { normaliseForHash, normaliseMobile } from '../../../shared/parser';
 import { DEFAULT_PAYMENT, effectivePayment } from '../../../shared/features';
 import { isIsoDate } from '../../../shared/cod';
@@ -268,49 +269,128 @@ const EXPORT_COLS: Column[] = [
   { head: 'Added by', width: 16 },
   { head: 'Printed', width: 9 },
 ];
+const dmy = (iso?: string) => (iso ? iso.split('-').reverse().join('-') : '');
+
+/** The Excel file for the list filters (same file for Download and for email). */
+async function buildExport(query: unknown, u: AuthUser) {
+  const f = listQuery.parse(query);
+  const { w, p } = listWhere(f, u);
+  const { rows } = await q(
+    `SELECT o.id, to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
+            o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note, o.payment_type,
+            o.amount::float8 AS amount, o.weight, to_char(o.booking_date, 'DD-MM-YYYY') AS booking_date,
+            cu.name AS added_by, o.is_printed
+       FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
+      ORDER BY o.created_at DESC, o.id DESC LIMIT 50000`,
+    p,
+  );
+  const data = rows.map((r) => [
+    r.id,
+    r.date,
+    r.ship_name,
+    r.address,
+    r.landmark,
+    r.district,
+    r.state,
+    r.pincode,
+    r.mobile1,
+    r.mobile2,
+    r.product_name,
+    r.size,
+    r.note,
+    r.payment_type === 'COD' ? 'COD' : 'Prepaid',
+    r.amount === null ? null : Number(r.amount),
+    r.weight,
+    r.booking_date,
+    r.added_by,
+    r.is_printed ? 'Yes' : 'No',
+  ]);
+  const file = await buildXlsx('Orders', EXPORT_COLS, data);
+  const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.xlsx`;
+  const range = f.from || f.to ? `${dmy(f.from) || 'start'} to ${dmy(f.to) || 'today'}` : 'all dates';
+  return { file, name, count: rows.length, range };
+}
+
 r.get(
   '/export',
   requireAdmin,
   h(async (req, res) => {
-    const f = listQuery.parse(req.query);
-    const { w, p } = listWhere(f, req.user);
-    const { rows } = await q(
-      `SELECT o.id, to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
-              o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note, o.payment_type,
-              o.amount::float8 AS amount, o.weight, to_char(o.booking_date, 'DD-MM-YYYY') AS booking_date,
-              cu.name AS added_by, o.is_printed
-         FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
-        ORDER BY o.created_at DESC, o.id DESC LIMIT 50000`,
-      p,
-    );
-    const data = rows.map((r) => [
-      r.id,
-      r.date,
-      r.ship_name,
-      r.address,
-      r.landmark,
-      r.district,
-      r.state,
-      r.pincode,
-      r.mobile1,
-      r.mobile2,
-      r.product_name,
-      r.size,
-      r.note,
-      r.payment_type === 'COD' ? 'COD' : 'Prepaid',
-      r.amount === null ? null : Number(r.amount),
-      r.weight,
-      r.booking_date,
-      r.added_by,
-      r.is_printed ? 'Yes' : 'No',
-    ]);
-    const file = await buildXlsx('Orders', EXPORT_COLS, data);
-    const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.xlsx`;
+    const { file, name } = await buildExport(req.query, req.user);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('X-File-Name', name);
     res.setHeader('Access-Control-Expose-Headers', 'X-File-Name, Content-Disposition');
     res.send(file);
+  }),
+);
+
+// POST /api/orders/export/email?<same filters> {client_request_id} -> the same Excel file emailed to OWNER_EMAIL
+// (server/.env – the app never sends a recipient). Owner only. Same safety as "Send to Owner": one at a time
+// per user, the same request id never sends twice, at most 10 per hour. No customer details in the log.
+const EXCEL_EMAILS_PER_HOUR = 10;
+r.post(
+  '/export/email',
+  requireAdmin,
+  h(async (req, res) => {
+    const { client_request_id } = z.object({ client_request_id: z.uuid('Missing request id') }).parse(req.body ?? {});
+    const u = req.user;
+    if (!mailReady()) throw new HttpError(503, 'EMAIL_NOT_SET_UP', 'Email is not set up on the server yet.');
+    const c = await pool.connect();
+    const lockKey = `excel-email:${u.id}`;
+    const locked = (await c.query('SELECT pg_try_advisory_lock(hashtext($1)) AS ok', [lockKey])).rows[0].ok as boolean;
+    if (!locked) {
+      c.release();
+      throw new HttpError(409, 'BUSY', 'Already sending – please wait.');
+    }
+    try {
+      const done = await c.query(
+        `SELECT new_data FROM audit_logs WHERE action = 'EXCEL_EMAIL' AND user_id = $1 AND new_data->>'request_id' = $2 LIMIT 1`,
+        [u.id, client_request_id],
+      );
+      if (done.rowCount) {
+        const d = done.rows[0].new_data;
+        return res.json({ sent: true, to: d.to, orders: d.orders, fileName: d.file, repeated: true });
+      }
+      const recent = await c.query(
+        `SELECT count(*)::int AS n FROM audit_logs WHERE action = 'EXCEL_EMAIL' AND user_id = $1 AND created_at > now() - interval '1 hour'`,
+        [u.id],
+      );
+      if (recent.rows[0].n >= EXCEL_EMAILS_PER_HOUR) {
+        throw new HttpError(429, 'RATE_LIMITED', `At most ${EXCEL_EMAILS_PER_HOUR} emails per hour. Please try again later.`);
+      }
+      const { file, name, count, range } = await buildExport(req.query, u);
+      if (!count) throw new HttpError(400, 'VALIDATION', 'No orders to send for these filters.');
+      const text = [
+        'Hello,',
+        '',
+        'Please find attached the orders Excel sheet.',
+        '',
+        `* Total Orders: ${count}`,
+        `* Dates: ${range}`,
+        '',
+        'Regards,',
+        'Prasad Shoes',
+      ].join('\n');
+      let sent: { to: string };
+      try {
+        sent = await sendToOwner({
+          subject: `Prasad Shoes – Orders Excel (${count} orders, ${range})`,
+          text,
+          fileName: name,
+          file,
+          idempotencyKey: `excel-${client_request_id}`,
+        });
+      } catch (e) {
+        const err = e as { code?: string; responseCode?: number; message?: string };
+        console.error(`[excel-email] Resend failed: ${err.responseCode ?? ''} ${err.code ?? ''} ${String(err.message ?? '').slice(0, 200)}`);
+        throw new HttpError(502, 'EMAIL_FAILED', 'Unable to send email. Please try again.');
+      }
+      await audit(c, u.id, 'EXCEL_EMAIL', 'orders', null, null, { request_id: client_request_id, to: sent.to, orders: count, file: name });
+      res.json({ sent: true, to: sent.to, orders: count, fileName: name });
+    } finally {
+      await c.query('SELECT pg_advisory_unlock(hashtext($1))', [lockKey]).catch(() => {});
+      c.release();
+    }
   }),
 );
 

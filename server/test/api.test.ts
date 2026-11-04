@@ -334,3 +334,30 @@ test('shop details: staff cannot edit', { skip }, async () => {
   assert.equal((await call('PUT', '/shop', shop, staff)).status, 403);
   assert.equal((await call('PUT', '/shop', shop, owner)).status, 200);
 });
+
+test('Print (owner only): one-time print page, same labels as Word, orders marked printed', { skip }, async () => {
+  const a = await call('POST', '/orders', order({ ship_name: 'Print Prepaid' }), owner);
+  const b = await call('POST', '/orders', order({ ship_name: 'Print COD', payment_type: 'COD', amount: 1999, size: '8', note: 'pona sanke awaj' }), owner);
+  assert.equal(a.status, 201);
+  assert.equal(b.status, 201);
+  const ids = [a.data.id, b.data.id];
+  // staff cannot use Print, even calling the API directly; not logged in = 401
+  assert.equal((await call('POST', '/labels/print', { orderIds: ids }, staff)).status, 403);
+  assert.equal((await call('POST', '/labels/print', { orderIds: ids })).status, 401);
+  const r = await call('POST', '/labels/print', { orderIds: ids }, owner);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.orders, 2);
+  assert.equal(r.data.pages, 1);
+  assert.match(r.data.url, /^\/api\/print\/[\w-]{20,}$/);
+  // the page itself needs no login (the random key is the permission), and works only once
+  const page = await fetch(`${API}${r.data.url}`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  for (const s of ['TO, Print Prepaid', 'TO, Print COD', 'COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY', 'COD 1999 (Size 8 pona sanke awaj)', 'From :-', '@page { size: A4 portrait']) {
+    assert.ok(html.includes(s), `${s} in the print page`);
+  }
+  assert.equal((await fetch(`${API}${r.data.url}`)).status, 404, 'second open: expired');
+  assert.equal((await fetch(`${API}/api/print/not-a-real-key`)).status, 404);
+  // marked printed, like Download Word
+  for (const id of ids) assert.equal((await call('GET', `/orders/${id}`, undefined, owner)).data.is_printed, true);
+});

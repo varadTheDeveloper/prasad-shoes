@@ -82,7 +82,7 @@ const para = (align: (typeof AlignmentType)[keyof typeof AlignmentType], childre
   new Paragraph({ alignment: align, spacing: { before: 0, after: 0, line: 264 }, children, ...extra });
 
 /** Very long addresses get a smaller font so the TO block always fits its fixed space. */
-function sizeFor(o: LabelOrder): number {
+export function sizeFor(o: LabelOrder): number {
   const lines = [o.ship_name, ...toLines(o), orderLine(o)].reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 55)), 0);
   if (lines <= 11) return SIZE; // 14 pt
   if (lines <= 13) return 24; // 12 pt

@@ -1,10 +1,12 @@
+import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool, q, tx } from '../db';
 import { HttpError, forbidden, h, notFound } from '../errors';
-import { can, requireAdmin, requirePermission } from '../middleware/auth';
+import { can, requireAdmin, requirePermission, type AuthUser } from '../middleware/auth';
 import { audit } from '../services/audit';
 import { buildLabelsDocx } from '../services/docx';
+import { buildLabelsHtml } from '../services/printHtml';
 import { mailReady, sendToOwner } from '../services/mailer';
 import { pagesFor, type LabelOrder, type LabelShop } from '../../../shared/label';
 
@@ -41,54 +43,93 @@ const body = z.object({
   markPrinted: z.boolean().default(true),
 });
 
+/** Loads the orders (in the order picked), checks reprint rights, records the batch and (optionally)
+ *  marks them printed. Used by Download Word and by Print – both count as printing. */
+async function printBatch(u: AuthUser, orderIds: number[], markPrinted: boolean, via: 'word' | 'print') {
+  const ids = [...new Set(orderIds)];
+  const { rows } = await q(`SELECT ${labelCols()} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
+  const byId = new Map(rows.map((o) => [o.id, o]));
+  // One combined list: orders saved by the owner and by every staff member print together,
+  // in the order the user selected them.
+  const orders = ids.map((id) => byId.get(id)).filter(Boolean);
+  if (orders.length === 0) throw notFound('No orders to print');
+  const already = orders.filter((o) => o.is_printed);
+  if (already.length && !can(u, 'LABEL_REPRINT')) {
+    throw new HttpError(403, 'FORBIDDEN', `${already.length} of these orders are already printed. Only the owner can reprint them.`, {
+      printedIds: already.map((o) => o.id),
+    });
+  }
+  const batchId = await tx(async (c) => {
+    const b = await c.query(`INSERT INTO label_batches (created_by, order_count, page_count) VALUES ($1,$2,$3) RETURNING id`, [
+      u.id,
+      orders.length,
+      pagesFor(orders.length),
+    ]);
+    const id = b.rows[0].id as number;
+    await c.query(
+      `INSERT INTO label_batch_orders (batch_id, order_id, position)
+       SELECT $1, x.id, x.pos FROM unnest($2::int[]) WITH ORDINALITY AS x(id, pos)`,
+      [id, orders.map((o) => o.id)],
+    );
+    if (markPrinted) {
+      await c.query(`UPDATE orders SET is_printed = TRUE, printed_at = now(), printed_by = $2 WHERE id = ANY($1::int[])`, [
+        orders.map((o) => o.id),
+        u.id,
+      ]);
+    }
+    await audit(c, u.id, 'LABEL_PRINT', 'label_batches', id, null, { orders: orders.length, markPrinted, ...(via === 'print' ? { via } : {}) });
+    return id;
+  });
+  return { orders: orders as LabelOrder[], batchId };
+}
+
 // POST /api/labels  {orderIds:[...], markPrinted} -> .docx file
 r.post(
   '/',
   requirePermission('LABEL_PRINT'),
   h(async (req, res) => {
     const { orderIds, markPrinted } = body.parse(req.body);
-    const u = req.user;
-    const ids = [...new Set(orderIds)];
-    const { rows } = await q(`SELECT ${labelCols()} FROM orders WHERE id = ANY($1::int[]) AND deleted_at IS NULL`, [ids]);
-    const byId = new Map(rows.map((o) => [o.id, o]));
-    // One combined list: orders saved by the owner and by every staff member print together,
-    // in the order the user selected them.
-    const orders = ids.map((id) => byId.get(id)).filter(Boolean);
-    if (orders.length === 0) throw notFound('No orders to print');
-    const already = orders.filter((o) => o.is_printed);
-    if (already.length && !can(u, 'LABEL_REPRINT')) {
-      throw new HttpError(403, 'FORBIDDEN', `${already.length} of these orders are already printed. Only the owner can reprint them.`, {
-        printedIds: already.map((o) => o.id),
-      });
-    }
-
-    const buf = await buildLabelsDocx(orders as LabelOrder[], await loadShop());
-
-    const batchId = await tx(async (c) => {
-      const b = await c.query(`INSERT INTO label_batches (created_by, order_count, page_count) VALUES ($1,$2,$3) RETURNING id`, [
-        u.id,
-        orders.length,
-        pagesFor(orders.length),
-      ]);
-      const id = b.rows[0].id as number;
-      await c.query(
-        `INSERT INTO label_batch_orders (batch_id, order_id, position)
-         SELECT $1, x.id, x.pos FROM unnest($2::int[]) WITH ORDINALITY AS x(id, pos)`,
-        [id, orders.map((o) => o.id)],
-      );
-      if (markPrinted) {
-        await c.query(`UPDATE orders SET is_printed = TRUE, printed_at = now(), printed_by = $2 WHERE id = ANY($1::int[])`, [
-          orders.map((o) => o.id),
-          u.id,
-        ]);
-      }
-      await audit(c, u.id, 'LABEL_PRINT', 'label_batches', id, null, { orders: orders.length, markPrinted });
-      return id;
-    });
-
+    const { orders, batchId } = await printBatch(req.user, orderIds, markPrinted, 'word');
+    const buf = await buildLabelsDocx(orders, await loadShop());
     sendDocx(res, buf, orders.length, batchId);
   }),
 );
+
+// ------------------------------------------------------------------ POST /api/labels/print (owner only)
+// "Print": the same labels as the Word file as a print page (services/printHtml.ts). Marks the orders
+// printed (like Download Word). Answers with a one-time link: the website loads it in a hidden frame and
+// prints; the phone app opens it in Chrome, which shows the print window. The link works once, for
+// 10 minutes, and carries no customer data – only a random key.
+const PRINT_TTL = 10 * 60_000;
+const printPages = new Map<string, { html: string; until: number }>();
+
+r.post(
+  '/print',
+  requireAdmin,
+  h(async (req, res) => {
+    const { orderIds, markPrinted } = body.parse(req.body);
+    const { orders } = await printBatch(req.user, orderIds, markPrinted, 'print');
+    const shop = await loadShop();
+    const key = randomBytes(24).toString('base64url');
+    const now = Date.now();
+    for (const [k, v] of printPages) if (v.until < now) printPages.delete(k);
+    printPages.set(key, { html: buildLabelsHtml(orders, shop, req.body?.autoPrint === true), until: now + PRINT_TTL });
+    res.json({ url: `/api/print/${key}`, orders: orders.length, pages: pagesFor(orders.length) });
+  }),
+);
+
+/** GET /api/print/:key – the print page (no login: the random one-time key is the permission). */
+export const printPageRouter = Router();
+printPageRouter.get('/:key', (req, res) => {
+  const p = printPages.get(req.params.key);
+  printPages.delete(req.params.key);
+  res.setHeader('Cache-Control', 'no-store');
+  if (!p || p.until < Date.now()) {
+    res.status(404).type('html').send('<p style="font-family:sans-serif">This print link has expired. Tap Print again in the app.</p>');
+    return;
+  }
+  res.type('html').send(p.html);
+});
 
 // ------------------------------------------------------------------ POST /api/labels/email (owner only)
 // "Send to Owner": the same Word file as Download Word, emailed to OWNER_EMAIL (server/.env).

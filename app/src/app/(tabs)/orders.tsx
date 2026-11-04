@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import * as Crypto from 'expo-crypto';
 import { api, apiFile, ApiError } from '@/lib/api';
 import { saveFile } from '@/lib/download';
+import { printLabels } from '@/lib/print';
 import { getPref, setPref } from '@/lib/storage';
 import { OrdersTable } from '@/components/OrdersTable';
 import { useIsAdmin, usePermission } from '@/lib/auth';
@@ -162,6 +163,28 @@ export default function Orders() {
     const ids = [...selected].sort((a, b) => b - a);
     setSelection(ids);
     router.push({ pathname: '/labels', params: { n: String(ids.length) } });
+  }
+
+  // Owner only: "Print" – the print window of this browser / phone; the orders are marked printed.
+  const [printing, setPrinting] = useState(false);
+  async function print() {
+    if (printing || selected.size === 0) return;
+    setPrinting(true);
+    setSendMsg(null);
+    try {
+      const ids = [...selected].sort((a, b) => b - a); // same order as Download Word
+      const r = await printLabels(ids);
+      setSendMsg({ kind: 'ok', text: t('{n} orders sent to the print window and marked printed.', { n: r.orders }) });
+      setSelected(new Set());
+      setAllIds(null);
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      qc.invalidateQueries({ queryKey: ['batches'] });
+    } catch (e) {
+      setSendMsg({ kind: 'danger', text: t((e as Error).message) });
+    } finally {
+      setPrinting(false);
+    }
   }
 
   async function sendToOwner() {
@@ -371,7 +394,7 @@ export default function Orders() {
       ) : null}
       {canPrint && selected.size > 0 && !table ? (
         <View style={st.footer}>
-          {/* Phone + owner (2 buttons): count on top, the two buttons side by side below.
+          {/* Phone + owner (3 buttons): count on top, the three buttons side by side below.
               Otherwise one row: count left, button(s) right. The count never shrinks. */}
           <View style={[st.footerCard, { maxWidth: wide ? 1100 : 720 }, admin && !wide && st.footerStacked]}>
             <View style={admin && !wide ? st.footerCountRow : st.footerCount}>
@@ -383,22 +406,32 @@ export default function Orders() {
                 {t(pagesFor(selected.size) === 1 ? '{n} A4 page' : '{n} A4 pages', { n: pagesFor(selected.size) })}
               </Muted>
             </View>
-            <View style={[st.footerButtons, admin && !wide && { justifyContent: 'space-between' }]}>
+            <View style={[st.footerButtons, admin && !wide && { justifyContent: 'space-between', gap: 8 }]}>
               {admin ? (
                 <Button
                   kind="secondary"
-                  title={sending ? t('Sending…') : t('✉  Send to Owner')}
+                  title={sending ? t('Sending…') : wide ? t('✉  Send to Owner') : t('✉ Email')}
                   onPress={sendToOwner}
                   loading={sending}
-                  disabled={sending || selected.size === 0}
-                  style={wide ? { paddingHorizontal: 16 } : { flex: 1, paddingHorizontal: 8 }}
+                  disabled={sending || printing || selected.size === 0}
+                  style={wide ? { paddingHorizontal: 16 } : { flex: 1, paddingHorizontal: 6 }}
+                />
+              ) : null}
+              {admin ? (
+                <Button
+                  kind="secondary"
+                  title={printing ? t('Preparing…') : t('🖨  Print')}
+                  onPress={print}
+                  loading={printing}
+                  disabled={sending || printing || selected.size === 0}
+                  style={wide ? { paddingHorizontal: 16 } : { flex: 1, paddingHorizontal: 6 }}
                 />
               ) : null}
               <Button
-                title={t('Download Word')}
+                title={admin && !wide ? t('⬇ Word') : t('Download Word')}
                 onPress={download}
-                disabled={sending}
-                style={admin && !wide ? { flex: 1, paddingHorizontal: 8 } : { paddingHorizontal: 22 }}
+                disabled={sending || printing}
+                style={admin && !wide ? { flex: 1, paddingHorizontal: 6 } : { paddingHorizontal: 22 }}
               />
             </View>
           </View>

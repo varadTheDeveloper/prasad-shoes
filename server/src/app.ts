@@ -5,7 +5,7 @@ import { errorHandler } from './errors';
 import { requireAuth } from './middleware/auth';
 import authRoutes, { meRouter } from './routes/auth';
 import orderRoutes from './routes/orders';
-import labelRoutes from './routes/labels';
+import labelRoutes, { printPageRouter } from './routes/labels';
 import userRoutes, { permissionsRouter } from './routes/users';
 import shopRoutes, { statsRouter } from './routes/shop';
 import pincodeRoutes from './routes/pincode';
@@ -44,6 +44,7 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/me', meRouter);
   app.use('/api/orders', requireAuth, orderRoutes);
+  app.use('/api/print', printPageRouter); // one-time print pages (no login; see routes/labels.ts)
   app.use('/api/labels', requireAuth, labelRoutes);
   app.use('/api/users', requireAuth, userRoutes);
   app.use('/api/permissions', requireAuth, permissionsRouter);

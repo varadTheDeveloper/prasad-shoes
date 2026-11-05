@@ -223,14 +223,6 @@ function cleanValue(v: string): string {
     .trim();
 }
 
-function cleanSize(v: string): string {
-  return toAsciiDigits(v)
-    .replace(/\b(?:no|number|num|uk|ind|india)\b\.?/gi, ' ')
-    .replace(/नंबर|नं\.?/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 // Pincode prefix -> state. Only prefixes that map to one state are listed; others stay empty.
 const PIN_STATE_3: Record<string, string> = { '403': 'Goa', '737': 'Sikkim', '744': 'Andaman and Nicobar', '682': 'Kerala', '160': 'Chandigarh' };
 const PIN_STATE_2: Record<string, string> = {
@@ -310,7 +302,7 @@ function labelOfExact(raw: string): { key: Key; rest: string } | null {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Product line: "11 no black shahu 2999+ naal" -> size 11, product "black shahu", amount 2999, note "naal".
+// Product line: "11 no black shahu 2999+ naal" -> size 11, amount 2999, note "black shahu 2999+ naal".
 // Starts with a shoe size. Read only when it can't be an address line ("12 Shivaji Nagar"): the size has
 // "no" after it and the line has an amount or comes after the pincode / mobile, or (without "no") it
 // comes after the pincode / mobile and has an amount.
@@ -325,14 +317,17 @@ function productLine(line: string, afterContact: boolean): { size: string; produ
   const a = rest.match(PRODUCT_AMOUNT);
   const ok = m[2] ? !!a || afterContact : !!a && afterContact;
   if (!ok) return null;
-  const tidy = (t: string) => t.replace(/^[\s,+\-–—:/]+|[\s,+\-–—:/]+$/g, '').replace(/\s{2,}/g, ' ').trim();
-  if (!a) return { size: m[1], product: tidy(rest), note: '', amount: null };
-  return {
-    size: m[1],
-    product: tidy(rest.slice(0, a.index)),
-    note: tidy(rest.slice(a.index! + a[0].length)),
-    amount: parseAmount(a[1]),
-  };
+  // Product name is never guessed (staff type it): the words stay in Note exactly as written.
+  return { size: m[1], product: '', note: rest.replace(/\s{2,}/g, ' ').trim(), amount: a ? parseAmount(a[1]) : null };
+}
+
+/** "12 antique Hankare kapshi 1799+ naal" -> size "12", rest "antique Hankare kapshi 1799+ naal"; "9 no" -> "9", "";
+ *  "UK 8" -> "8"; "medium" -> size "" (not a shoe size number), rest "medium". */
+function sizeAndRest(value: string): { size: string; rest: string } {
+  const v = toAsciiDigits(value).replace(/^[\s:：\-–—.=,>]+/, '').trim();
+  const m = v.match(/^(?:(?:uk|ind|india)\s*)?(\d{1,2}(?:\.5)?)(?![\d.])\s*(?:no\b\.?|number\b|नंबर|नं\.?)?\s*[,\-–:]?\s*(.*)$/i);
+  if (m) return { size: m[1], rest: m[2].trim() };
+  return { size: '', rest: v };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -375,8 +370,16 @@ export function parseWhatsApp(text: string): ParseResult {
       return;
     }
     if (key === 'size') {
-      const s = cleanSize(value);
-      if (s) f.size = s;
+      // Size = only the shoe size number ("Size 12 antique Hankare kapshi 1799+ naal + sole" -> 12).
+      // The words after it go to Note exactly as written; a price in them also fills Amount.
+      // No clear size number -> Size stays empty and the text goes to Note (nothing lost).
+      const sz = sizeAndRest(value);
+      if (sz.size) f.size = sz.size;
+      if (sz.rest) {
+        if (!note) note = sz.rest;
+        const a = sz.rest.match(PRODUCT_AMOUNT);
+        if (a && amount === null) amount = parseAmount(a[1]);
+      }
       return;
     }
     // "Landmark- Radha Krishna" + "Mandir" on the next line -> "Radha Krishna Mandir"

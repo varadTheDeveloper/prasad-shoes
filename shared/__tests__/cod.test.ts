@@ -143,7 +143,8 @@ test('missing amount is reported (COD needs one)', () => {
 
 test('Prepaid reading is unchanged by the COD reader', () => {
   const a = parseWhatsApp(WA);
-  assert.equal(a.size, '8 pona sanke awaj', 'Prepaid keeps the size as written');
+  assert.equal(a.size, '8', 'Size = only the number');
+  assert.equal(a.note, 'pona sanke awaj', 'the words stay in Note as written');
   assert.equal(a.ship_name, 'vijay shivaji ingale');
 });
 

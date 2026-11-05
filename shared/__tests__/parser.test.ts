@@ -386,7 +386,7 @@ test('a 5-digit pincode after "Pincode:" stays in the pincode field (shown in re
   check(`Name: Amit Patil\nAddress: Plot 4, Udgir\nPincode: 41352\nMobile: 9850011223`, { address: 'Plot 4, Udgir', pincode: '41352', mobile1: '9850011223' });
 });
 
-test('product line "11 no black shahu 2999+ naal": size, product, amount, note – not in the address', () => {
+test('product line "11 no black shahu 2999+ naal": size, amount, note as written – not in the address', () => {
   const text = `Basha\n Near Nutan\nPrashala, Nandi Nagar Vijapur Road,\nSolapur, DIST: Solapur, Maharashtra - 413004\n+91 99219 95554\n\n11 no black shahu 2999+ naal`;
   const r = parseWhatsApp(text);
   assert.equal(r.ship_name, 'Basha');
@@ -395,22 +395,37 @@ test('product line "11 no black shahu 2999+ naal": size, product, amount, note �
   assert.equal(r.pincode, '413004');
   assert.equal(r.mobile1, '9921995554');
   assert.equal(r.size, '11');
-  assert.equal(r.product_name, 'black shahu');
+  assert.equal(r.product_name, ''); // never guessed – staff type it
   assert.equal(r.amount, 2999);
-  assert.equal(r.note, 'naal');
+  assert.equal(r.note, 'black shahu 2999+ naal');
   assert.deepEqual(unused(text), []);
 });
 
 test('product line variants; an address line starting with a number stays in the address', () => {
   const base = `Ramesh Patil\nShivaji Chowk, Latur\n413512\n9850011223\n`;
   let r = parseWhatsApp(base + '9 no kolhapuri red');
-  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', 'kolhapuri red', null, '']);
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', '', null, 'kolhapuri red']);
   r = parseWhatsApp(base + '8 pona sanke 1999');
-  assert.deepEqual([r.size, r.product_name, r.amount], ['8', 'pona sanke', 1999]);
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['8', '', 1999, 'pona sanke 1999']);
   assert.equal(r.address, 'Shivaji Chowk, Latur');
   // "12 Shivaji Nagar" before the pincode / mobile is an address, not a product
   r = parseWhatsApp(`Ramesh Patil\n12 Shivaji Nagar, Latur\n413512\n9850011223`);
   assert.equal(r.address, '12 Shivaji Nagar, Latur');
   assert.equal(r.product_name, '');
   assert.equal(r.size, '');
+});
+
+test('"Size 12 antique Hankare kapshi 1799+ naal + sole": Size 12 only, the rest in Note as written', () => {
+  const text = `Brijmohan Agarwal\nsri sai ram pooja samagiri stores 8-4-393 erragadda main road\nopp metro pillar no 961 sanathnagar\n hyderabad telangana 500018\n9247130703\n\nSize 12 antique Hankare kapshi 1799+ naal + sole`;
+  const r = parseWhatsApp(text);
+  assert.equal(r.size, '12');
+  assert.equal(r.note, 'antique Hankare kapshi 1799+ naal + sole');
+  assert.equal(r.amount, 1799);
+  assert.equal(r.product_name, '');
+  assert.deepEqual(unused(text), []);
+  // no clear size number: Size stays empty, the words are kept in Note
+  const m = parseWhatsApp(`Ramesh Patil\nShivaji Chowk, Latur 413512\n9850011223\nSize - medium`);
+  assert.deepEqual([m.size, m.note], ['', 'medium']);
+  assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize - 9 no`).size, '9');
+  assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize: UK 8`).size, '8');
 });

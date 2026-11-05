@@ -35,9 +35,32 @@ export function formatAmount(n: number | null | undefined): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-/** COD 1299 (Kolhapuri Kurundwad, 10 no, RED KURUNDWAD) – empty parts are skipped. */
+const wordKey = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '');
+/**
+ * The Note without words that Product name already says, so nothing prints twice:
+ * Product "Sankeswari awaj With Naal" + Note "Sankeswari awaj With Naal" -> ''
+ * Product "Sankeswari" + Note "Sankeswari awaj With Naal" -> "awaj With Naal". Other notes stay as they are.
+ */
+export function noteWithoutProduct(product: string | null | undefined, note: string | null | undefined): string {
+  const n = (note ?? '').trim();
+  const p = (product ?? '').trim().split(/\s+/).map(wordKey).filter(Boolean);
+  if (!n || !p.length) return n;
+  const nWords = n.split(/\s+/);
+  const nk = nWords.map(wordKey);
+  const at = (hay: string[], needle: string[]) => {
+    for (let i = 0; i + needle.length <= hay.length; i++) if (needle.every((w, j) => hay[i + j] === w)) return i;
+    return -1;
+  };
+  const nkClean = nk.filter(Boolean);
+  if (nkClean.length && at(p, nkClean) >= 0) return ''; // the note is part of the product name
+  const i = at(nk, p);
+  if (i < 0) return n;
+  return [...nWords.slice(0, i), ...nWords.slice(i + p.length)].join(' ').replace(/^[\s,\-–]+|[\s,\-–]+$/g, '').trim();
+}
+
+/** COD 1299 (Kolhapuri Kurundwad, 10 no, RED KURUNDWAD) – empty parts are skipped, nothing twice. */
 export function orderLine(o: LabelOrder): string {
-  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', o.note?.trim()].filter(Boolean);
+  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', noteWithoutProduct(o.product_name, o.note)].filter(Boolean);
   const head = o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${formatAmount(o.amount)}`.trim();
   return parts.length ? `${head} (${parts.join(', ')})` : head;
 }
@@ -114,7 +137,7 @@ export function codAmountLine(o: LabelOrder): string {
 /** The line under the address: "COD 1999 (Size 8 pona sanke awaj)" – size and description from the order. */
 export function codOrderLine(o: LabelOrder): string {
   const size = o.size?.trim();
-  const sizeText = [size ? `Size ${size}` : '', o.note?.trim()].filter(Boolean).join(' ');
+  const sizeText = [size ? `Size ${size}` : '', noteWithoutProduct(o.product_name, o.note)].filter(Boolean).join(' ');
   const parts = [o.product_name?.trim(), sizeText].filter(Boolean);
   const head = `COD ${formatAmount(o.amount)}`.trim();
   return parts.length ? `${head} (${parts.join(', ')})` : head;

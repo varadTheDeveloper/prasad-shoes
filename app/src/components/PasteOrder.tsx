@@ -21,6 +21,7 @@ import { DuplicateSheet } from '@/components/DuplicateSheet';
 import { ToPreview } from '@/components/LabelPreview';
 import { AddressNotes, mismatchKey, mismatchText, usePinCheck } from '@/components/AddressChecks';
 import { codRemainder, findUnused, parseCodMessage, parseWhatsApp } from '@shared/parser';
+import { noteWithoutProduct } from '@shared/label';
 import { FEATURES } from '@shared/features';
 import { C, R } from '@/lib/theme';
 import type { DuplicateMatch, Order, PaymentType } from '@shared/types';
@@ -136,7 +137,13 @@ export function usePasteOrder() {
   }
 
   function change(k: FormKey, v: string) {
-    setForm((f) => ({ ...f, [k]: v }));
+    setForm((f) => {
+      const next = { ...f, [k]: v };
+      // Product name typed with the same words as the pasted Note: the Note is cleared, so the screen
+      // shows what prints (the label never prints the words twice). A Note typed by hand stays.
+      if (k === 'product_name' && f.note && !touched.has('note') && v.trim() && !noteWithoutProduct(v, f.note)) next.note = '';
+      return next;
+    });
     setTouched((t) => new Set(t).add(k));
     setAutoFilled((a) => {
       if (!a.has(k)) return a;

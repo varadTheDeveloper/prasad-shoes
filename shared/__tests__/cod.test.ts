@@ -211,3 +211,24 @@ test('"Mohalla" / "Mohan Nagar" stay in the address (Mo. needs a number after it
   assert.equal(r.address, 'Mohalla Peth, Mohan Nagar, Latur');
   assert.equal(r.mobile1, '9850011223');
 });
+
+test('nothing printed twice: Note words already in Product name are left out', () => {
+  const o = { ...cod, amount: 1999, size: '8' };
+  assert.equal(codOrderLine({ ...o, product_name: null, note: 'Sankeswari awaj With Naal' }), 'COD 1999 (Size 8 Sankeswari awaj With Naal)');
+  assert.equal(codOrderLine({ ...o, product_name: 'Sankeswari awaj With Naal', note: 'Sankeswari awaj With Naal' }), 'COD 1999 (Sankeswari awaj With Naal, Size 8)');
+  assert.equal(codOrderLine({ ...o, product_name: 'Sankeswari', note: 'Sankeswari awaj With Naal' }), 'COD 1999 (Sankeswari, Size 8 awaj With Naal)');
+  assert.equal(codOrderLine({ ...o, product_name: 'Kolhapuri', note: 'RED' }), 'COD 1999 (Kolhapuri, Size 8 RED)');
+  assert.equal(orderLine({ ...o, payment_type: 'PREPAID', product_name: 'black shahu', size: '11', note: 'Black Shahu' }), 'PREPAID (black shahu, 11 no)');
+});
+
+test('"Product: …" / "Product name - …" lines fill Product name, not the address', () => {
+  const base = `Sumit Dwivedi\nDurgagunj Bilgram Hardoi\nPincode- 241301\nMo. 9119654901\n`;
+  let r = parseCodMessage(base + 'Product: Sankeswari\nCOD 1999 (Size 8)');
+  assert.deepEqual([r.product_name, r.size, r.amount, r.address], ['Sankeswari', '8', 1999, 'Durgagunj Bilgram Hardoi']);
+  r = parseCodMessage(base + 'Product name - Kolhapuri Kurundwad\nCOD 1499 (Size 9)');
+  assert.deepEqual([r.product_name, r.size, r.amount], ['Kolhapuri Kurundwad', '9', 1499]);
+  // not in the message = left empty
+  r = parseCodMessage(base + 'COD 1999');
+  assert.deepEqual([r.product_name, r.size, r.note], ['', '', '']);
+  assert.deepEqual(findUnused(codRemainder(base + 'Product: Sankeswari\nCOD 1999'), parseCodMessage(base + 'Product: Sankeswari\nCOD 1999') as never), []);
+});

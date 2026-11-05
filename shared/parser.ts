@@ -315,6 +315,7 @@ function labelOfExact(raw: string): { key: Key; rest: string } | null {
 // "no" after it and the line has an amount or comes after the pincode / mobile, or (without "no") it
 // comes after the pincode / mobile and has an amount.
 // ---------------------------------------------------------------------------------------------
+const PRODUCT_LABEL = /^(?:product|products|product\s*name|item|item\s*name|प्रोडक्ट|उत्पादन)\s*[:：\-–—=.]\s*(.+)$/i;
 const PRODUCT_RE = /^(\d{1,2}(?:\.5)?)\s*(no\.?|number|नंबर|नं\.?)?\s+(.*\p{L}.*)$/iu;
 const PRODUCT_AMOUNT = /(?:₹|rs\.?\s*)?(?<![\d.])(\d{3,5}|\d{1,2},\d{3})(?![\d.])\s*(?:\/-|\+|rs\.?|₹)?/i;
 function productLine(line: string, afterContact: boolean): { size: string; product: string; note: string; amount: number | null } | null {
@@ -399,6 +400,14 @@ export function parseWhatsApp(text: string): ParseResult {
     const am = amountOf(raw, current);
     if (am) {
       if (amount === null) amount = am.amount;
+      continue;
+    }
+
+    // "Product: Sankeswari" / "Product name - Kolhapuri Kurundwad" / "Item: …" -> Product name
+    const pl = raw.match(PRODUCT_LABEL);
+    if (pl && cleanValue(pl[1])) {
+      if (!product_name) product_name = cleanValue(pl[1]);
+      current = null;
       continue;
     }
 

@@ -54,8 +54,8 @@ type Key = Exclude<ParsedField, 'amount' | 'product_name' | 'note'>;
 // ---------------------------------------------------------------------------------------------
 const END = '(?=$|[\\s:：\\-–—.=,)>])';
 const LABELS: { key: Key; re: RegExp }[] = [
-  { key: 'mobile2', re: new RegExp(`^(?:alt(?:ernate)?\\.?\\s*(?:mob(?:ile)?|ph(?:one)?|no|number|contact)?|(?:mob(?:ile)?|ph(?:one)?|contact|whats\\s?app|मोबाईल|मोबाइल|फोन)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*[-:]?\\s*(?:2|२|ii|two)|(?:second|दुसरा)\\s*(?:mob(?:ile)?|no|number|नंबर)?)${END}`, 'i') },
-  { key: 'mobile1', re: new RegExp(`^(?:(?:mob(?:ile)?|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*(?:[-:]?\\s*(?:1|१|i|one)(?![0-9]))?)${END}`, 'i') },
+  { key: 'mobile2', re: new RegExp(`^(?:alt(?:ernate)?\\.?\\s*(?:mob(?:ile)?|ph(?:one)?|no|number|contact)?|(?:mob(?:ile)?|mo|ph(?:one)?|contact|whats\\s?app|मोबाईल|मोबाइल|फोन)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*[-:]?\\s*(?:2|२|ii|two)|(?:second|दुसरा)\\s*(?:mob(?:ile)?|no|number|नंबर)?)${END}`, 'i') },
+  { key: 'mobile1', re: new RegExp(`^(?:(?:mob(?:ile)?|mo|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*(?:[-:]?\\s*(?:1|१|i|one)(?![0-9]))?)${END}`, 'i') },
   { key: 'pincode', re: new RegExp(`^(?:pin\\s*-?\\s*code|pincode|pin\\s*no|pin|postal\\s*code|zip(?:\\s*code)?|पिन\\s*कोड|पिनकोड|पिन)${END}`, 'i') },
   { key: 'landmark', re: new RegExp(`^(?:land\\s*mark|nearby|near\\s*by|लँडमार्क|लॅंडमार्क|लैंडमार्क|खूण)${END}`, 'i') },
   { key: 'district', re: new RegExp(`^(?:district|dist|distt|zilla|zilha|jilha|jila|जिल्हा|जिला)${END}`, 'i') },
@@ -252,6 +252,20 @@ export function stateFromPincode(pin: string): string {
   return PIN_STATE_3[pin.slice(0, 3)] ?? PIN_STATE_2[pin.slice(0, 2)] ?? '';
 }
 
+const STATE_NAMES = new Map(
+  [
+    ...new Set([...Object.values(PIN_STATE_2), ...Object.values(PIN_STATE_3)]),
+    'Uttarakhand', 'Delhi', 'New Delhi', 'Tripura', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Arunachal Pradesh',
+    'Ladakh', 'Puducherry', 'Pondicherry', 'Lakshadweep', 'Dadra and Nagar Haveli and Daman and Diu', 'Jammu & Kashmir',
+    'Andaman & Nicobar', 'UP', 'MP', 'महाराष्ट्र', 'उत्तर प्रदेश', 'मध्य प्रदेश', 'कर्नाटक', 'गुजरात', 'राजस्थान', 'तेलंगणा', 'गोवा',
+  ].map((n) => [n.toLowerCase().replace(/[^\p{L}\p{M}]+/gu, ''), n === 'UP' ? 'Uttar Pradesh' : n === 'MP' ? 'Madhya Pradesh' : n]),
+);
+/** "Uttar Pradesh" / "uttar pradesh." / "महाराष्ट्र" on a line of its own -> the state name, otherwise ''. */
+function stateLine(v: string): string {
+  if (/\d/.test(v)) return '';
+  return STATE_NAMES.get(v.toLowerCase().replace(/[^\p{L}\p{M}]+/gu, '')) ?? '';
+}
+
 /** The message split into lines, without WhatsApp time / sender prefixes and bullets. */
 function messageLines(text: string): string[] {
   return (text ?? '')
@@ -364,7 +378,9 @@ export function parseWhatsApp(text: string): ParseResult {
       if (s) f.size = s;
       return;
     }
-    if (append && f[key]) f[key] = `${f[key]}, ${value}`;
+    // "Landmark- Radha Krishna" + "Mandir" on the next line -> "Radha Krishna Mandir"
+    if (append && f[key] && key === 'landmark' && !/,$/.test(f[key])) f[key] = `${f[key]} ${value}`;
+    else if (append && f[key]) f[key] = `${f[key]}, ${value}`;
     else f[key] = value;
   };
 
@@ -416,6 +432,13 @@ export function parseWhatsApp(text: string): ParseResult {
     // Unlabelled line: belongs to the label above it, if any.
     const value = cleanValue(raw);
     if (!value) continue;
+    // A line that is only a state ("Uttar Pradesh") is the State, not more landmark / address.
+    const stateName = stateLine(value);
+    if (stateName) {
+      if (!f.state) f.state = stateName;
+      current = null;
+      continue;
+    }
     if (current) {
       if (SINGLE_LINE.includes(current)) {
         if (currentTook === 0) {

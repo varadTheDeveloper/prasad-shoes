@@ -192,3 +192,22 @@ test('Prepaid label text is unchanged', () => {
   const pre: LabelOrder = { ...cod, payment_type: 'PREPAID', product_name: 'Kolhapuri', size: '9', note: 'RED', booking_date: null };
   assert.equal(orderLine(pre), 'PREPAID (Kolhapuri, 9 no, RED)');
 });
+
+test('real COD message: "Mo." is Mobile, a state line goes to State, landmark on two lines joins with a space', () => {
+  const msg = `Sumit Dwivedi\nVillage Name Sumit Dwivedi Durgagunj Bilgram Hardoi\nPincode- 241301\nLandmark- Radha Krishna\nMandir\nUttar Pradesh\nMo. 9119654901, 9112582108\n\nCOD 1999 (Size- 8 Sankeswari awaj With Naal)`;
+  const r = parseCodMessage(msg);
+  assert.equal(r.landmark, 'Radha Krishna Mandir');
+  assert.equal(r.state, 'Uttar Pradesh');
+  assert.equal(r.mobile1, '9119654901');
+  assert.equal(r.mobile2, '9112582108');
+  assert.equal(r.address, 'Village Name Sumit Dwivedi Durgagunj Bilgram Hardoi');
+  assert.equal(r.amount, 1999);
+  assert.equal(r.size, '8');
+  assert.equal(r.note, 'Sankeswari awaj With Naal');
+});
+
+test('"Mohalla" / "Mohan Nagar" stay in the address (Mo. needs a number after it)', () => {
+  const r = parseWhatsApp(`Ramesh Patil\nMohalla Peth, Mohan Nagar\nLatur 413512\n9850011223`);
+  assert.equal(r.address, 'Mohalla Peth, Mohan Nagar, Latur');
+  assert.equal(r.mobile1, '9850011223');
+});

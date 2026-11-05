@@ -70,7 +70,7 @@ Server-only changes do not need a new APK.
   (no table cell margins – WPS adds them to row heights).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
-- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label.**
+- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** (only change since: the Prepaid amount prints last when filled – `PREPAID (red capsi, 9 no, 1299)` – not twice when the Note already has that price; client's wish 5 Nov 2026).
   COD: amount required; booking date + weight in their own columns (migration 005), cleared when an order is Prepaid.
   Booking Under / Customer ID 1634841966 / Contract ID 41282773 / BNPL HUB Pune 411001 are constants in `shared/cod.ts` –
   never stored, never parsed, always printed. COD label = the shop's printed COD label: 4 centred header lines

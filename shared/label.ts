@@ -58,11 +58,20 @@ export function noteWithoutProduct(product: string | null | undefined, note: str
   return [...nWords.slice(0, i), ...nWords.slice(i + p.length)].join(' ').replace(/^[\s,\-–]+|[\s,\-–]+$/g, '').trim();
 }
 
-/** COD 1299 (Kolhapuri Kurundwad, 10 no, RED KURUNDWAD) – empty parts are skipped, nothing twice. */
+/** PREPAID (Kolhapuri Kurundwad, 10 no, RED, 1299) – empty parts are skipped, nothing twice. */
 export function orderLine(o: LabelOrder): string {
-  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', noteWithoutProduct(o.product_name, o.note)].filter(Boolean);
-  const head = o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${formatAmount(o.amount)}`.trim();
-  return parts.length ? `${head} (${parts.join(', ')})` : head;
+  const note = noteWithoutProduct(o.product_name, o.note);
+  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', note];
+  // Prepaid: the amount typed in the form prints last – "PREPAID (red capsi, 9 no, 1299)" – unless the
+  // product / note already show that price ("4veni 999+sol" with amount 999 -> printed once).
+  const amt = formatAmount(o.amount);
+  if (o.payment_type === 'PREPAID' && amt && Number(amt) > 0) {
+    const shown = new RegExp(`(?<![\\d.])${amt.replace('.', '\\.')}(?![\\d])`).test(`${o.product_name ?? ''} ${note}`);
+    if (!shown) parts.push(amt);
+  }
+  const head = o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${amt}`.trim();
+  const p = parts.filter(Boolean);
+  return p.length ? `${head} (${p.join(', ')})` : head;
 }
 
 /**

@@ -189,9 +189,15 @@ test('COD line after the address uses the real amount, size and description', ()
   ]);
 });
 
-test('Prepaid label text is unchanged', () => {
+test('Prepaid label: the amount prints last when filled, once', () => {
   const pre: LabelOrder = { ...cod, payment_type: 'PREPAID', product_name: 'Kolhapuri', size: '9', note: 'RED', booking_date: null };
-  assert.equal(orderLine(pre), 'PREPAID (Kolhapuri, 9 no, RED)');
+  assert.equal(orderLine({ ...pre, amount: null }), 'PREPAID (Kolhapuri, 9 no, RED)');
+  assert.equal(orderLine(pre), 'PREPAID (Kolhapuri, 9 no, RED, 1999)');
+  assert.equal(orderLine({ ...pre, product_name: 'red capsi', note: null, amount: 1299 }), 'PREPAID (red capsi, 9 no, 1299)');
+  // the price already written in the Note: not printed again
+  assert.equal(orderLine({ ...pre, product_name: null, note: '4veni 999+sol', amount: 999 }), 'PREPAID (9 no, 4veni 999+sol)');
+  assert.equal(orderLine({ ...pre, product_name: null, size: null, note: null, amount: 1500 }), 'PREPAID (1500)');
+  assert.equal(orderLine({ ...pre, product_name: null, size: null, note: null, amount: null }), 'PREPAID');
 });
 
 test('real COD message: "Mo." is Mobile, a state line goes to State, landmark on two lines joins with a space', () => {
@@ -219,7 +225,7 @@ test('nothing printed twice: Note words already in Product name are left out', (
   assert.equal(codOrderLine({ ...o, product_name: 'Sankeswari awaj With Naal', note: 'Sankeswari awaj With Naal' }), 'COD 1999 (Sankeswari awaj With Naal, Size 8)');
   assert.equal(codOrderLine({ ...o, product_name: 'Sankeswari', note: 'Sankeswari awaj With Naal' }), 'COD 1999 (Sankeswari, Size 8 awaj With Naal)');
   assert.equal(codOrderLine({ ...o, product_name: 'Kolhapuri', note: 'RED' }), 'COD 1999 (Kolhapuri, Size 8 RED)');
-  assert.equal(orderLine({ ...o, payment_type: 'PREPAID', product_name: 'black shahu', size: '11', note: 'Black Shahu' }), 'PREPAID (black shahu, 11 no)');
+  assert.equal(orderLine({ ...o, payment_type: 'PREPAID', product_name: 'black shahu', size: '11', note: 'Black Shahu' }), 'PREPAID (black shahu, 11 no, 1999)');
 });
 
 test('"Product: …" / "Product name - …" lines fill Product name, not the address', () => {

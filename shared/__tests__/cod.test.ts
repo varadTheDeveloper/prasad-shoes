@@ -270,3 +270,19 @@ test('a phone number that is not in the form is shown as not used', () => {
   const form = { ...parseWhatsApp(text), mobile1: '8830589798' };
   assert.deepEqual(findUnused(text, form as never), ['Mobile no-9767239595']);
 });
+
+test('pasted note prints alone (nothing added from Size / Product / Amount); typed note: the typed fields print', () => {
+  const m = `sujay bhoir\nAddress -dhaniv baug,jadhavpada, nallasopara east, omkar hardwear\nLandmark ( NEARBY MOTHER BEAKRY)\nState -MAHARASHTRA\nPincode -401208\nMobile No 1.9637602214\nMobile no 2.8237489180\n\nCOD 1799 (10 no Lokare shahu awaj)`;
+  const r = parseCodMessage(m);
+  assert.equal(r.landmark, '( NEARBY MOTHER BEAKRY)'); // a real landmark, not the template hint
+  assert.deepEqual([r.size, r.note, r.amount], ['10', '10 no Lokare shahu awaj', 1799]);
+  const o = { ...cod, ...r, payment_type: 'COD' as const, raw_message: m };
+  assert.equal(codOrderLine(o), 'COD 1799 (10 no Lokare shahu awaj)');
+  assert.equal(codOrderLine({ ...o, product_name: 'Lokare' }), 'COD 1799 (10 no Lokare shahu awaj)');
+  // Prepaid with a pasted note: the note only, no "9 no", no product, no amount
+  const p = `Ramesh\nLatur 413512\n9850011223\nSize 9 4veni 999+sol`;
+  assert.equal(orderLine({ ...cod, payment_type: 'PREPAID', size: '9', note: 'Size 9 4veni 999+sol', product_name: 'kolhapuri', amount: 1299, raw_message: p }), 'PREPAID (Size 9 4veni 999+sol)');
+  // nothing pasted for the note: the typed fields print
+  assert.equal(orderLine({ ...cod, payment_type: 'PREPAID', size: '9', note: 'red', product_name: 'red capsi', amount: 1299, raw_message: '' }), 'PREPAID (red capsi, 9 no, 1299)');
+  assert.equal(codOrderLine({ ...cod, size: '9', note: null, product_name: 'red capsi', amount: 1299, raw_message: 'Ramesh\nLatur' }), 'COD 1299 (red capsi, Size 9)');
+});

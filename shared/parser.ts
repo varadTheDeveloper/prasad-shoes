@@ -212,7 +212,8 @@ function parseAmount(s: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-const HINT = /\(\s*near\s*by[^)]*\)|\(\s*nearby[^)]*\)/gi; // "( NEARBY SCHOOL, ROAD , CHOWK )" from the template itself
+// Only the template's own hint "( NEARBY SCHOOL, ROAD , CHOWK )" – a real landmark "( NEARBY MOTHER BEAKRY)" stays.
+const HINT = /\(\s*near\s*by\s*school\s*[,/]?\s*road\s*[,/]?\s*chowk\s*\)/gi;
 
 function cleanValue(v: string): string {
   return v
@@ -859,7 +860,9 @@ export function parseCodMessage(text: string): CodParseResult {
   const r = parseWhatsApp(parts.to);
   const sz = splitSize(r.size);
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
-  const noteSize = parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ?? '';
+  const noteSize =
+    parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ??
+    toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
   const out: CodParseResult = {
     ...r,
     size: sz.size || noteSize,

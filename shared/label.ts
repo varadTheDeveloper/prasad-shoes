@@ -68,8 +68,18 @@ export function noteSaysSize(note: string, size: string | null | undefined): boo
   return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?![\\d.])|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i').test(note);
 }
 
+/** The Note came from the pasted message (its words are in it, as written). */
+export function noteIsPasted(o: LabelOrder): boolean {
+  const flat = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const note = flat(o.note ?? '');
+  return !!note && !!o.raw_message && ` ${flat(o.raw_message)} `.includes(` ${note} `);
+}
+
 /** PREPAID (Kolhapuri Kurundwad, 10 no, RED, 1299) – empty parts are skipped, nothing twice. */
 export function orderLine(o: LabelOrder): string {
+  // Note from the pasted message: only that note prints, exactly as written – nothing added from
+  // Product name, Size or Amount (client, 5 Nov 2026). Otherwise the typed fields print.
+  if (noteIsPasted(o)) return `${o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${formatAmount(o.amount)}`.trim()} (${o.note!.trim()})`;
   const note = noteWithoutProduct(o.product_name, o.note);
   // The pasted note is printed as written; "9 no" only when the note doesn't already say the size.
   const parts = [o.product_name?.trim(), o.size?.trim() && !noteSaysSize(note, o.size) ? `${o.size.trim()} no` : '', note];
@@ -159,6 +169,8 @@ export function codAmountLine(o: LabelOrder): string {
 
 /** The line under the address: "COD 1999 (Size 8 pona sanke awaj)" – size and description from the order. */
 export function codOrderLine(o: LabelOrder): string {
+  // Note from the pasted message: "COD 1799 (10 no Lokare shahu awaj)" – the note only, as written.
+  if (noteIsPasted(o)) return `COD ${formatAmount(o.amount)}`.trim() + ` (${o.note!.trim()})`;
   const size = o.size?.trim();
   const note = noteWithoutProduct(o.product_name, o.note);
   // The note already says the size as written ("Size-7 no sanke"): print the note as it is, without "Size 7" again.

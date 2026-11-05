@@ -318,7 +318,7 @@ function productLine(line: string, afterContact: boolean): { size: string; produ
   const ok = m[2] ? !!a || afterContact : !!a && afterContact;
   if (!ok) return null;
   // Product name is never guessed (staff type it): the words stay in Note exactly as written.
-  return { size: m[1], product: '', note: rest.replace(/\s{2,}/g, ' ').trim(), amount: a ? parseAmount(a[1]) : null };
+  return { size: m[1], product: '', note: line.replace(/\s{2,}/g, ' ').trim(), amount: a ? parseAmount(a[1]) : null };
 }
 
 /** "12 antique Hankare kapshi 1799+ naal" -> size "12", rest "antique Hankare kapshi 1799+ naal"; "9 no" -> "9", "";
@@ -381,19 +381,26 @@ export function parseWhatsApp(text: string): ParseResult {
       const sz = sizeAndRest(value);
       if (sz.size) f.size = sz.size;
       if (sz.rest) {
-        if (!note) note = sz.rest;
+        // Note = the whole size line exactly as written ("SIZE- 9 CUTKAAN KaPSHI 1799"); the label then
+        // prints it as it is, without "9 no" again.
+        if (!note) note = sz.size && lineRaw.includes(value) ? lineRaw.replace(/\s{2,}/g, ' ').trim() : sz.rest;
         const a = sz.rest.match(PRODUCT_AMOUNT);
         if (a && amount === null) amount = parseAmount(a[1]);
       }
       return;
     }
     // "Landmark- Radha Krishna" + "Mandir" on the next line -> "Radha Krishna Mandir"
-    if (append && f[key] && key === 'landmark' && !/,$/.test(f[key])) f[key] = `${f[key]} ${value}`;
+    if (append && f[key] && key === 'landmark' && !/,$/.test(f[key]) && !/^\s*,/.test(lineRaw)) f[key] = `${f[key]} ${value}`;
     else if (append && f[key]) f[key] = `${f[key]}, ${value}`;
     else f[key] = value;
   };
 
-  for (const raw of lines) {
+  let lineRaw = '';
+  for (let raw of lines) {
+    // "(SIZE- 9 CUTKAAN KaPSHI 1799)": a size line in brackets is read like "SIZE- 9 CUTKAAN KaPSHI 1799".
+    const wrapped = raw.match(/^\(\s*((?:size|sizes|साइज|साईज|माप)\b.*?)\s*\)?\s*$/i);
+    if (wrapped) raw = wrapped[1];
+    lineRaw = raw;
     if (!raw) {
       // A blank line ends a multi-line value.
       current = null;

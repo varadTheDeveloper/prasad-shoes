@@ -71,7 +71,7 @@ test('WhatsApp order: customer, COD amount, size + description', () => {
   assert.equal(p.mobile2, '8421605771');
   assert.equal(p.amount, 1999);
   assert.equal(p.size, '8');
-  assert.equal(p.note, 'pona sanke awaj'); // separate "Size 8 …" line: size + words
+  assert.equal(p.note, 'Size 8 pona sanke awaj'); // the size line as written
   assert.equal(codOrderLine({ ...cod, ...p, payment_type: 'COD' }), 'COD 1999 (Size 8 pona sanke awaj)');
   assert.deepEqual(p.missing, []);
   assert.deepEqual(findUnused(codRemainder(WA), p as any), []);
@@ -146,7 +146,7 @@ test('missing amount is reported (COD needs one)', () => {
 test('Prepaid reading is unchanged by the COD reader', () => {
   const a = parseWhatsApp(WA);
   assert.equal(a.size, '8', 'Size = only the number');
-  assert.equal(a.note, 'pona sanke awaj', 'the words stay in Note as written');
+  assert.equal(a.note, 'Size 8 pona sanke awaj', 'the size line stays in Note as written');
   assert.equal(a.ship_name, 'vijay shivaji ingale');
 });
 

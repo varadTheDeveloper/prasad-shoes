@@ -60,10 +60,19 @@ export function noteWithoutProduct(product: string | null | undefined, note: str
   return [...nWords.slice(0, i), ...nWords.slice(i + p.length)].join(' ').replace(/^[\s,\-–]+|[\s,\-–]+$/g, '').trim();
 }
 
+/** The note already says this size as written ("SIZE- 9 CUTKAAN…", "Size-7 no sanke", "11 no black shahu"). */
+export function noteSaysSize(note: string, size: string | null | undefined): boolean {
+  const z = (size ?? '').trim();
+  if (!z || !note) return false;
+  const n = z.replace('.', '\\.');
+  return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?![\\d.])|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i').test(note);
+}
+
 /** PREPAID (Kolhapuri Kurundwad, 10 no, RED, 1299) – empty parts are skipped, nothing twice. */
 export function orderLine(o: LabelOrder): string {
   const note = noteWithoutProduct(o.product_name, o.note);
-  const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', note];
+  // The pasted note is printed as written; "9 no" only when the note doesn't already say the size.
+  const parts = [o.product_name?.trim(), o.size?.trim() && !noteSaysSize(note, o.size) ? `${o.size.trim()} no` : '', note];
   // Prepaid: the amount typed in the form prints last – "PREPAID (red capsi, 9 no, 1299)" – unless the
   // product / note / pasted message already show that price ("4veni 999+sol" with amount 999 -> printed once).
   const amt = formatAmount(o.amount);
@@ -153,7 +162,7 @@ export function codOrderLine(o: LabelOrder): string {
   const size = o.size?.trim();
   const note = noteWithoutProduct(o.product_name, o.note);
   // The note already says the size as written ("Size-7 no sanke"): print the note as it is, without "Size 7" again.
-  const said = !!size && new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${size.replace('.', '\\.')}(?![\\d.])`, 'i').test(note);
+  const said = noteSaysSize(note, size);
   const sizeText = said ? note : [size ? `Size ${size}` : '', note].filter(Boolean).join(' ');
   const parts = [o.product_name?.trim(), sizeText].filter(Boolean);
   const head = `COD ${formatAmount(o.amount)}`.trim();

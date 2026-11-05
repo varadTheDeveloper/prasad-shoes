@@ -1,5 +1,6 @@
 // Run: cd server && npm test
 // Add every real WhatsApp message that fills wrongly here, then fix parser.ts until it passes.
+import { orderLine } from '../label';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseWhatsApp, normaliseForHash, normaliseMobile, stateFromPincode } from '../parser';
@@ -397,16 +398,16 @@ test('product line "11 no black shahu 2999+ naal": size, amount, note as written
   assert.equal(r.size, '11');
   assert.equal(r.product_name, ''); // never guessed – staff type it
   assert.equal(r.amount, 2999);
-  assert.equal(r.note, 'black shahu 2999+ naal');
+  assert.equal(r.note, '11 no black shahu 2999+ naal'); // the line as written
   assert.deepEqual(unused(text), []);
 });
 
 test('product line variants; an address line starting with a number stays in the address', () => {
   const base = `Ramesh Patil\nShivaji Chowk, Latur\n413512\n9850011223\n`;
   let r = parseWhatsApp(base + '9 no kolhapuri red');
-  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', '', null, 'kolhapuri red']);
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', '', null, '9 no kolhapuri red']);
   r = parseWhatsApp(base + '8 pona sanke 1999');
-  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['8', '', 1999, 'pona sanke 1999']);
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['8', '', 1999, '8 pona sanke 1999']);
   assert.equal(r.address, 'Shivaji Chowk, Latur');
   // "12 Shivaji Nagar" before the pincode / mobile is an address, not a product
   r = parseWhatsApp(`Ramesh Patil\n12 Shivaji Nagar, Latur\n413512\n9850011223`);
@@ -419,7 +420,7 @@ test('"Size 12 antique Hankare kapshi 1799+ naal + sole": Size 12 only, the rest
   const text = `Brijmohan Agarwal\nsri sai ram pooja samagiri stores 8-4-393 erragadda main road\nopp metro pillar no 961 sanathnagar\n hyderabad telangana 500018\n9247130703\n\nSize 12 antique Hankare kapshi 1799+ naal + sole`;
   const r = parseWhatsApp(text);
   assert.equal(r.size, '12');
-  assert.equal(r.note, 'antique Hankare kapshi 1799+ naal + sole');
+  assert.equal(r.note, 'Size 12 antique Hankare kapshi 1799+ naal + sole'); // as written
   assert.equal(r.amount, 1799);
   assert.equal(r.product_name, '');
   assert.deepEqual(unused(text), []);
@@ -428,4 +429,16 @@ test('"Size 12 antique Hankare kapshi 1799+ naal + sole": Size 12 only, the rest
   assert.deepEqual([m.size, m.note], ['', 'medium']);
   assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize - 9 no`).size, '9');
   assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize: UK 8`).size, '8');
+});
+
+test('size line in brackets "(SIZE- 9 CUTKAAN KaPSHI 1799)": Note as written, not in the address; label prints it once', () => {
+  const text = `sanket gaddamwar\nAddress - at post gogaon\nLandmark ( NEAR PANCHASHIL BUDDHA VIHAR MAIN  ROAD\n, CHATRAPATI SHIVAJI MAHARAJ CHOWK )\nState - MAHARASHTRA\nPincode -442605\nMobile No 1.- 9403423542\nMobile no 2.\n\n(SIZE- 9 CUTKAAN KaPSHI 1799)`;
+  const r = parseWhatsApp(text);
+  assert.equal(r.address, 'at post gogaon');
+  assert.equal(r.landmark, '( NEAR PANCHASHIL BUDDHA VIHAR MAIN ROAD, CHATRAPATI SHIVAJI MAHARAJ CHOWK )');
+  assert.deepEqual([r.size, r.note, r.amount], ['9', 'SIZE- 9 CUTKAAN KaPSHI 1799', 1799]);
+  assert.equal(orderLine({ ...r, payment_type: 'PREPAID', raw_message: text }), 'PREPAID (SIZE- 9 CUTKAAN KaPSHI 1799)');
+  assert.deepEqual(unused(text), []);
+  // typed by hand (no size words in the note): "9 no" and the amount print as before
+  assert.equal(orderLine({ ...r, note: 'red', amount: 1299, raw_message: '', payment_type: 'PREPAID' }), 'PREPAID (9 no, red, 1299)');
 });

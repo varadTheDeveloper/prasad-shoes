@@ -17,6 +17,8 @@ export interface LabelOrder {
   note?: string | null;
   payment_type: 'COD' | 'PREPAID';
   amount?: number | null;
+  /** The pasted WhatsApp message ('' = typed by hand). A Prepaid price that came from it is not added again. */
+  raw_message?: string | null;
   // COD only
   booking_date?: string | null;
   weight?: string | null;
@@ -63,10 +65,13 @@ export function orderLine(o: LabelOrder): string {
   const note = noteWithoutProduct(o.product_name, o.note);
   const parts = [o.product_name?.trim(), o.size?.trim() ? `${o.size.trim()} no` : '', note];
   // Prepaid: the amount typed in the form prints last – "PREPAID (red capsi, 9 no, 1299)" – unless the
-  // product / note already show that price ("4veni 999+sol" with amount 999 -> printed once).
+  // product / note / pasted message already show that price ("4veni 999+sol" with amount 999 -> printed once).
   const amt = formatAmount(o.amount);
   if (o.payment_type === 'PREPAID' && amt && Number(amt) > 0) {
-    const shown = new RegExp(`(?<![\\d.])${amt.replace('.', '\\.')}(?![\\d])`).test(`${o.product_name ?? ''} ${note}`);
+    // also when the price came in the pasted message ("₹1,599.00 (estimated total)"): pasted orders stay as written
+    const [int, dec] = amt.split('.');
+    const num = `${int.length > 3 ? `${int.slice(0, -3)},?${int.slice(-3)}` : int}${dec ? `\\.${dec}` : '(?:\\.0+)?'}`;
+    const shown = new RegExp(`(?<![\\d.,])${num}(?![\\d])`).test(`${o.product_name ?? ''} ${note} ${o.raw_message ?? ''}`);
     if (!shown) parts.push(amt);
   }
   const head = o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${amt}`.trim();

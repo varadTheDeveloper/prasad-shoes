@@ -18,7 +18,7 @@ async function loadShop(): Promise<LabelShop> {
 }
 
 const LABEL_COLS = `id, ship_name, address, landmark, district, state, pincode, mobile1, mobile2, product_name, size, note,
-  payment_type, amount, is_printed, created_by, weight`;
+  payment_type, amount, is_printed, created_by, weight, raw_message`;
 /** Columns for the label, with table prefix p ('o.' or ''); the booking date as 'YYYY-MM-DD' text. */
 const labelCols = (p = '') =>
   `${LABEL_COLS.split(',').map((c) => p + c.trim()).join(', ')}, to_char(${p}booking_date, 'YYYY-MM-DD') AS booking_date`;

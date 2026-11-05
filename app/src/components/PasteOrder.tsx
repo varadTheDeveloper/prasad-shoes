@@ -272,7 +272,7 @@ export function usePasteOrder() {
     type, setType,
     noteCount: notes.length, highlight, autoFilled, needsAck, mismatch, applyPincodeValues, keepTyped,
     applyPaste, change, clear, pasteFromClipboard, addToAddress, ignore, save, setDup,
-    label: formToLabel(form),
+    label: { ...formToLabel(form), raw_message: raw },
   };
 }
 

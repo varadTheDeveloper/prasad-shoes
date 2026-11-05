@@ -239,3 +239,11 @@ test('"Product: …" / "Product name - …" lines fill Product name, not the add
   assert.deepEqual([r.product_name, r.size, r.note], ['', '', '']);
   assert.deepEqual(findUnused(codRemainder(base + 'Product: Sankeswari\nCOD 1999'), parseCodMessage(base + 'Product: Sankeswari\nCOD 1999') as never), []);
 });
+
+test('Prepaid amount: typed by hand prints last; a price from the pasted message is never added again', () => {
+  const o: LabelOrder = { ...cod, payment_type: 'PREPAID', product_name: 'red capsi', size: '9', note: null, amount: 1299 };
+  assert.equal(orderLine(o), 'PREPAID (red capsi, 9 no, 1299)');
+  assert.equal(orderLine({ ...o, product_name: null, note: '4veni 999+sol', amount: 999 }), 'PREPAID (9 no, 4veni 999+sol)');
+  assert.equal(orderLine({ ...o, raw_message: 'Ramesh\n₹1,599.00 (estimated total)', amount: 1599 }), 'PREPAID (red capsi, 9 no)');
+  assert.equal(orderLine({ ...o, raw_message: 'Ramesh\nLatur 413512', amount: 1299 }), 'PREPAID (red capsi, 9 no, 1299)');
+});

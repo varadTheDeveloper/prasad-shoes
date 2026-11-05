@@ -21,7 +21,9 @@ export type ParsedField =
   | 'mobile1'
   | 'mobile2'
   | 'size'
-  | 'amount';
+  | 'amount'
+  | 'product_name'
+  | 'note';
 
 export interface ParseResult {
   ship_name: string;
@@ -34,6 +36,9 @@ export interface ParseResult {
   mobile2: string;
   size: string;
   amount: number | null;
+  /** From a product line like "11 no black shahu 2999+ naal": product "black shahu", note "naal". */
+  product_name: string;
+  note: string;
   /** Fields that were filled (for the "8 fields auto-filled" chip). */
   filled: ParsedField[];
   /** Fields that should be checked by a person: empty required fields and guessed values. */
@@ -41,7 +46,7 @@ export interface ParseResult {
   guessed: ParsedField[];
 }
 
-type Key = Exclude<ParsedField, 'amount'>;
+type Key = Exclude<ParsedField, 'amount' | 'product_name' | 'note'>;
 
 // ---------------------------------------------------------------------------------------------
 // Label dictionary. Order matters: more specific labels first (Mobile 2 before Mobile 1).
@@ -291,6 +296,31 @@ function labelOfExact(raw: string): { key: Key; rest: string } | null {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Product line: "11 no black shahu 2999+ naal" -> size 11, product "black shahu", amount 2999, note "naal".
+// Starts with a shoe size. Read only when it can't be an address line ("12 Shivaji Nagar"): the size has
+// "no" after it and the line has an amount or comes after the pincode / mobile, or (without "no") it
+// comes after the pincode / mobile and has an amount.
+// ---------------------------------------------------------------------------------------------
+const PRODUCT_RE = /^(\d{1,2}(?:\.5)?)\s*(no\.?|number|नंबर|नं\.?)?\s+(.*\p{L}.*)$/iu;
+const PRODUCT_AMOUNT = /(?:₹|rs\.?\s*)?(?<![\d.])(\d{3,5}|\d{1,2},\d{3})(?![\d.])\s*(?:\/-|\+|rs\.?|₹)?/i;
+function productLine(line: string, afterContact: boolean): { size: string; product: string; note: string; amount: number | null } | null {
+  const m = toAsciiDigits(line).match(PRODUCT_RE);
+  if (!m) return null;
+  const rest = m[3];
+  const a = rest.match(PRODUCT_AMOUNT);
+  const ok = m[2] ? !!a || afterContact : !!a && afterContact;
+  if (!ok) return null;
+  const tidy = (t: string) => t.replace(/^[\s,+\-–—:/]+|[\s,+\-–—:/]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+  if (!a) return { size: m[1], product: tidy(rest), note: '', amount: null };
+  return {
+    size: m[1],
+    product: tidy(rest.slice(0, a.index)),
+    note: tidy(rest.slice(a.index! + a[0].length)),
+    amount: parseAmount(a[1]),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
 export function parseWhatsApp(text: string): ParseResult {
@@ -299,6 +329,10 @@ export function parseWhatsApp(text: string): ParseResult {
   };
   let amount: number | null = null;
   const loose: string[] = []; // unlabelled content lines, in order
+  const looseAfterContact: boolean[] = []; // the line comes after the pincode / mobile lines
+  let contactSeen = false;
+  let product_name = '';
+  let note = '';
 
   const lines = messageLines(text);
 
@@ -341,6 +375,9 @@ export function parseWhatsApp(text: string): ParseResult {
       continue;
     }
     if (isNoise(raw)) continue;
+    const lineHasContact = !!findPincode(raw) || findMobiles(raw).length > 0;
+    const contactBefore = contactSeen;
+    contactSeen ||= lineHasContact;
 
     // Amount lines: "₹1,599.00 (estimated total)", "Total 1599", "1599"
     const am = amountOf(raw, current);
@@ -395,12 +432,21 @@ export function parseWhatsApp(text: string): ParseResult {
       }
     }
     loose.push(value);
+    looseAfterContact.push(contactBefore && !lineHasContact);
   }
 
   // ------------------------------- Fallbacks -------------------------------
   const guessed: ParsedField[] = [];
   const looseKept: string[] = [];
-  for (const l of loose) {
+  loose.forEach((l, i) => {
+    const prod = productLine(l, looseAfterContact[i]);
+    if (prod) {
+      if (prod.size && !f.size) f.size = prod.size;
+      if (prod.product && !product_name) product_name = prod.product;
+      if (prod.note && !note) note = prod.note;
+      if (prod.amount !== null && amount === null) amount = prod.amount;
+      return;
+    }
     const mobiles = findMobiles(l);
     const withoutMobiles = toAsciiDigits(l).replace(MOBILE_RE, ' ');
     const pin = findPincode(l);
@@ -415,10 +461,10 @@ export function parseWhatsApp(text: string): ParseResult {
     const sz = toAsciiDigits(l).match(/^(\d{1,2}(?:\.5)?)\s*(?:no|number|नंबर|नं)?\.?$/i);
     if (sz) {
       if (!f.size) f.size = sz[1];
-      continue;
+      return;
     }
     if (!onlyNumbers) looseKept.push(l);
-  }
+  });
   if (!f.ship_name && looseKept.length) {
     f.ship_name = looseKept.shift()!;
   }
@@ -451,13 +497,29 @@ export function parseWhatsApp(text: string): ParseResult {
   // The pincode and phones have their own fields: don't repeat them inside the address / landmark.
   f.address = stripContactInfo(f.address, [f.pincode], [f.mobile1, f.mobile2]);
   f.landmark = stripContactInfo(f.landmark, [f.pincode], [f.mobile1, f.mobile2]);
+  // "…, Solapur, DIST: Solapur, Maharashtra - 413004": "DIST: Solapur" goes to District (it has its own
+  // field and line on the label), and the "-" left behind by the pincode is dropped.
+  const segs: string[] = [];
+  for (const seg of f.address.split(/,\s*/)) {
+    const lab = labelOfExact(seg.trim());
+    const v = lab ? cleanValue(lab.rest) : '';
+    if (lab && v && (lab.key === 'district' || lab.key === 'state')) {
+      if (!f[lab.key]) f[lab.key] = v;
+      continue;
+    }
+    const c = seg.replace(/[\s\-–—:/]+$/, '').trim();
+    if (c) segs.push(c);
+  }
+  f.address = segs.join(', ');
 
   const filled = (Object.keys(f) as Key[]).filter((k) => f[k]) as ParsedField[];
   if (amount !== null) filled.push('amount');
+  if (product_name) filled.push('product_name');
+  if (note) filled.push('note');
   const required: ParsedField[] = ['ship_name', 'address', 'pincode', 'mobile1'];
   const missing = required.filter((k) => !f[k as Key]);
 
-  return { ...f, amount, filled, missing, guessed };
+  return { ...f, amount, product_name, note, filled, missing, guessed };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -736,7 +798,7 @@ export function parseCodMessage(text: string): CodParseResult {
   const out: CodParseResult = {
     ...r,
     size: sz.size,
-    note: sz.note,
+    note: sz.note || r.note,
     amount: parts.amount ?? r.amount,
     booking_date: parts.date,
     weight: parts.weight,

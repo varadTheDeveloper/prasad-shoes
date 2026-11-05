@@ -112,6 +112,14 @@ export function usePasteOrder() {
         if (!touchedNow.has(k) || !f[k]) next[k] = p[k];
       });
       if (p.amount !== null && (!touchedNow.has('amount') || !f.amount)) next.amount = String(p.amount);
+      // "11 no black shahu 2999+ naal": product name and the words after the amount (Note)
+      // (typed by hand = kept; filled by an earlier paste = replaced)
+      const fill = (k: 'product_name' | 'note', v: string) => {
+        if (!touchedNow.has(k)) next[k] = v;
+        else if (!f[k] && v) next[k] = v;
+      };
+      fill('product_name', p.product_name);
+      if (!cod) fill('note', p.note);
       if (cod && 'booking_date' in p) {
         COD_KEYS.forEach((k) => {
           // No date in the message: keep the date already there (today by default).

@@ -351,7 +351,8 @@ test('a third phone number has no field: shown as not used', () => {
 test('extra lines after Address + Landmark are kept in the address (nothing lost)', () => {
   const text = `Name - Amit Kale\nAddress - Plot 9, Shivaji nagar\nLandmark - Near Hanuman mandir\n\nTaluka Udgir, Dist Latur\nPincode 413517\nMob 9850011223`;
   const r = parseWhatsApp(text);
-  assert.equal(r.address, 'Plot 9, Shivaji nagar, Taluka Udgir, Dist Latur');
+  assert.equal(r.address, 'Plot 9, Shivaji nagar, Taluka Udgir'); // "Dist Latur" -> District
+  assert.equal(r.district, 'Latur');
   assert.deepEqual(unused(text), []);
 });
 
@@ -383,4 +384,33 @@ Mobile No2: 1111111111`;
 
 test('a 5-digit pincode after "Pincode:" stays in the pincode field (shown in red), not in the address', () => {
   check(`Name: Amit Patil\nAddress: Plot 4, Udgir\nPincode: 41352\nMobile: 9850011223`, { address: 'Plot 4, Udgir', pincode: '41352', mobile1: '9850011223' });
+});
+
+test('product line "11 no black shahu 2999+ naal": size, product, amount, note – not in the address', () => {
+  const text = `Basha\n Near Nutan\nPrashala, Nandi Nagar Vijapur Road,\nSolapur, DIST: Solapur, Maharashtra - 413004\n+91 99219 95554\n\n11 no black shahu 2999+ naal`;
+  const r = parseWhatsApp(text);
+  assert.equal(r.ship_name, 'Basha');
+  assert.equal(r.address, 'Near Nutan, Prashala, Nandi Nagar Vijapur Road, Solapur, Maharashtra');
+  assert.equal(r.district, 'Solapur');
+  assert.equal(r.pincode, '413004');
+  assert.equal(r.mobile1, '9921995554');
+  assert.equal(r.size, '11');
+  assert.equal(r.product_name, 'black shahu');
+  assert.equal(r.amount, 2999);
+  assert.equal(r.note, 'naal');
+  assert.deepEqual(unused(text), []);
+});
+
+test('product line variants; an address line starting with a number stays in the address', () => {
+  const base = `Ramesh Patil\nShivaji Chowk, Latur\n413512\n9850011223\n`;
+  let r = parseWhatsApp(base + '9 no kolhapuri red');
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', 'kolhapuri red', null, '']);
+  r = parseWhatsApp(base + '8 pona sanke 1999');
+  assert.deepEqual([r.size, r.product_name, r.amount], ['8', 'pona sanke', 1999]);
+  assert.equal(r.address, 'Shivaji Chowk, Latur');
+  // "12 Shivaji Nagar" before the pincode / mobile is an address, not a product
+  r = parseWhatsApp(`Ramesh Patil\n12 Shivaji Nagar, Latur\n413512\n9850011223`);
+  assert.equal(r.address, '12 Shivaji Nagar, Latur');
+  assert.equal(r.product_name, '');
+  assert.equal(r.size, '');
 });

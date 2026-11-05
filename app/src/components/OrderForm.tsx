@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { Field, Input, Row, Segmented } from './ui';
+import { Field, Input, Row, Segmented, useWide } from './ui';
 import { DateField } from './DateField';
 import type { Order, OrderInput, PaymentType } from '@shared/types';
 import type { LabelOrder } from '@shared/label';
@@ -171,7 +171,15 @@ export function OrderForm({
     <Input value={f[k] as string} onChangeText={(v) => onChange(k, v)} error={!!errors[k]} highlight={hl(k)} {...extra} />
   );
   const half = { flex: 1 };
-  // Order on screen (client's wish): Prepaid = Product + Size first, then the receiver.
+  const wide = useWide(700); // computer: Product | Size | Amount in one row; phone: Amount under them
+  // Prepaid amount sits at the top with Product + Size (client's wish); COD has it in the COD details.
+  const prepaidAmount = f.payment_type !== 'COD' && showAmount;
+  const amountField = (
+    <Field label={t('Amount (₹, optional)')} error={errors.amount} style={half}>
+      {input('amount', { keyboardType: 'decimal-pad', placeholder: t('Optional') })}
+    </Field>
+  );
+  // Order on screen (client's wish): Prepaid = Product + Size + Amount first, then the receiver.
   // COD = COD details first, then Product + Size, then the receiver. Labels / printing are not affected.
   return (
     <View>
@@ -209,13 +217,20 @@ export function OrderForm({
         </View>
       ) : null}
       <Row>
-        <Field label={t('Product name (optional)')} error={errors.product_name} style={half}>
+        <Field label={t('Product name (optional)')} error={errors.product_name} style={wide && prepaidAmount ? { flex: 1.6 } : half}>
           {input('product_name', { placeholder: t('e.g. Kolhapuri Kurundwad') })}
         </Field>
-        <Field label={t('Size')} error={errors.size} style={half}>
+        <Field label={t('Size')} error={errors.size} style={wide && prepaidAmount ? { flex: 0.7 } : half}>
           {input('size', { placeholder: t('e.g. 9') })}
         </Field>
+        {prepaidAmount && wide ? amountField : null}
       </Row>
+      {prepaidAmount && !wide ? (
+        <Row>
+          {amountField}
+          <View style={half} />
+        </Row>
+      ) : null}
       <Field label={t('Name')} required error={errors.ship_name}>
         {input('ship_name', { autoCapitalize: 'words' })}
       </Field>
@@ -249,14 +264,6 @@ export function OrderForm({
           {input('note', { placeholder: t('e.g. RED') })}
         </Field>
       </Row>
-      {f.payment_type !== 'COD' && showAmount ? (
-        <Row>
-          <Field label={t('Amount (₹, optional)')} error={errors.amount} style={half}>
-            {input('amount', { keyboardType: 'decimal-pad', placeholder: t('Optional') })}
-          </Field>
-          <View style={half} />
-        </Row>
-      ) : null}
     </View>
   );
 }

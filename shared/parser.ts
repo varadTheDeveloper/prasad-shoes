@@ -357,6 +357,11 @@ export function parseWhatsApp(text: string): ParseResult {
       if (ms.length === 0) return;
       // A "Mobile" line may hold two numbers: "8106093098 / 9876543210"
       if (key === 'mobile1') {
+        // A second "Mobile no-" line is the second number, not a replacement for the first.
+        if (f.mobile1 && f.mobile1 !== ms[0]) {
+          if (!f.mobile2) f.mobile2 = ms[0];
+          return;
+        }
         f.mobile1 = ms[0];
         if (ms[1] && !f.mobile2) f.mobile2 = ms[1];
       } else {
@@ -596,7 +601,11 @@ export function findUnused(text: string, fields: Partial<Record<string, string |
       // Phone / pincode / size / name lines: the field has its own box; if it has a value, the person saw it.
       // (A phone line with more numbers than the two phone boxes is still checked.)
       const fits = hit.key === 'mobile1' ? rawNumbers(hit.rest).length <= 2 : rawNumbers(hit.rest).length <= 1;
-      if (hit.key !== 'address' && hit.key !== 'landmark' && fits && String(fields[hit.key] ?? '').trim()) continue;
+      // A phone / pincode line counts as used only when its numbers really are in the form (a second
+      // "Mobile no-" line that replaced the first would otherwise go unnoticed).
+      const numbersUsed = !['mobile1', 'mobile2', 'pincode'].includes(hit.key) ||
+        rawNumbers(hit.rest).every((n) => digits.includes(n.replace(/^(?:91|0)(?=\d{10}$)/, '')));
+      if (hit.key !== 'address' && hit.key !== 'landmark' && fits && numbersUsed && String(fields[hit.key] ?? '').trim()) continue;
     }
     const missing = tokens(cleanValue(value)).filter((t) => {
       if (IGNORE_WORDS.has(t) || known.has(t)) return false;
@@ -763,7 +772,8 @@ function codLine(raw: string): CodLine {
   if (a) {
     out.amount = parseAmount(a[1]);
     // "COD 1999 (Size 8 pona sanke awaj)": the size part is kept and read as "Size 8 pona sanke awaj".
-    const size = rest.match(/\(\s*((?:size|sizes|साइज|साईज|माप)\b[^)]*)\)?/i);
+    // …also without brackets: "COD 1299 Size-7 no sanke".
+    const size = rest.match(/\(?\s*((?:size|sizes|साइज|साईज|माप)\b[^)]*)\)?/i);
     // Otherwise the amount line (often with the amount in words) holds nothing for the address.
     rest = size ? size[1] : '';
   }

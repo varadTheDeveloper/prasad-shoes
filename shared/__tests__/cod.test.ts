@@ -247,3 +247,20 @@ test('Prepaid amount: typed by hand prints last; a price from the pasted message
   assert.equal(orderLine({ ...o, raw_message: 'Ramesh\n₹1,599.00 (estimated total)', amount: 1599 }), 'PREPAID (red capsi, 9 no)');
   assert.equal(orderLine({ ...o, raw_message: 'Ramesh\nLatur 413512', amount: 1299 }), 'PREPAID (red capsi, 9 no, 1299)');
 });
+
+test('real COD messages: size + note without brackets; two "Mobile no-" lines = Mobile 1 and Mobile 2', () => {
+  const a = `Name-Dhonde Ajay Ram\nAddress-Khasbag gali Ashti tal-Ashti Dist-Beed\nLandmark-khadkat chowk\nState-Maharashtra\nPincode-414203\nMobile no-9767239595\nMobile no-8830589798\n\nCOD 1299 Size-7 no sanke`;
+  const r = parseCodMessage(a);
+  assert.deepEqual([r.amount, r.size, r.note, r.mobile1, r.mobile2], [1299, '7', 'sanke', '9767239595', '8830589798']);
+  assert.equal(codOrderLine({ ...cod, ...r, payment_type: 'COD' }), 'COD 1299 (Size 7 sanke)');
+  const b = `GUDDU BAGHEL (Pithli)\nAddress  CHHATTISGARH BASTAR DISTRICT  GAON - RAJNAGAR   KOTWAR PARA\nLandmark RAJNAGAR KOTWAR PARA\nState Chhattisgarh\nPincode -494222\nMobile No 1.  9098415637\nMobile no 2. 7724962813\n\nCOD 1599 (Size - 6 kd awaj)`;
+  const q = parseCodMessage(b);
+  assert.deepEqual([q.amount, q.size, q.note, q.mobile1, q.mobile2], [1599, '6', 'kd awaj', '9098415637', '7724962813']);
+  assert.equal(codOrderLine({ ...cod, ...q, payment_type: 'COD' }), 'COD 1599 (Size 6 kd awaj)');
+});
+
+test('a phone number that is not in the form is shown as not used', () => {
+  const text = `Ramesh Patil\nShivaji Chowk, Latur\nPincode 413512\nMobile no-9767239595`;
+  const form = { ...parseWhatsApp(text), mobile1: '8830589798' };
+  assert.deepEqual(findUnused(text, form as never), ['Mobile no-9767239595']);
+});

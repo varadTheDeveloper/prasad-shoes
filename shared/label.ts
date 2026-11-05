@@ -151,7 +151,10 @@ export function codAmountLine(o: LabelOrder): string {
 /** The line under the address: "COD 1999 (Size 8 pona sanke awaj)" – size and description from the order. */
 export function codOrderLine(o: LabelOrder): string {
   const size = o.size?.trim();
-  const sizeText = [size ? `Size ${size}` : '', noteWithoutProduct(o.product_name, o.note)].filter(Boolean).join(' ');
+  const note = noteWithoutProduct(o.product_name, o.note);
+  // The note already says the size as written ("Size-7 no sanke"): print the note as it is, without "Size 7" again.
+  const said = !!size && new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${size.replace('.', '\\.')}(?![\\d.])`, 'i').test(note);
+  const sizeText = said ? note : [size ? `Size ${size}` : '', note].filter(Boolean).join(' ');
   const parts = [o.product_name?.trim(), sizeText].filter(Boolean);
   const head = `COD ${formatAmount(o.amount)}`.trim();
   return parts.length ? `${head} (${parts.join(', ')})` : head;

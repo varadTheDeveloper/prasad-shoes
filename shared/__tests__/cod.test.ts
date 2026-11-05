@@ -71,7 +71,8 @@ test('WhatsApp order: customer, COD amount, size + description', () => {
   assert.equal(p.mobile2, '8421605771');
   assert.equal(p.amount, 1999);
   assert.equal(p.size, '8');
-  assert.equal(p.note, 'pona sanke awaj');
+  assert.equal(p.note, 'pona sanke awaj'); // separate "Size 8 …" line: size + words
+  assert.equal(codOrderLine({ ...cod, ...p, payment_type: 'COD' }), 'COD 1999 (Size 8 pona sanke awaj)');
   assert.deepEqual(p.missing, []);
   assert.deepEqual(findUnused(codRemainder(WA), p as any), []);
 });
@@ -107,7 +108,8 @@ Mob. 7020861805, 9270063067.`;
   assert.equal(p.amount, 1999);
   assert.equal(p.booking_date, '2026-11-02');
   assert.equal(p.size, '8');
-  assert.equal(p.note, 'pona sanke awaj');
+  assert.equal(p.note, 'Size 8 pona sanke awaj'); // after the COD amount: as written ("( ONE THOUSAND … only)" is not a note)
+  assert.equal(codOrderLine({ ...cod, ...p, payment_type: 'COD' }), 'COD 1999 (Size 8 pona sanke awaj)');
   assert.equal(p.mobile1, '7888252371');
   assert.equal(p.mobile2, '8421605771');
   // the shop's own From block and the fixed IDs never reach the receiver
@@ -210,7 +212,8 @@ test('real COD message: "Mo." is Mobile, a state line goes to State, landmark on
   assert.equal(r.address, 'Village Name Sumit Dwivedi Durgagunj Bilgram Hardoi');
   assert.equal(r.amount, 1999);
   assert.equal(r.size, '8');
-  assert.equal(r.note, 'Sankeswari awaj With Naal');
+  assert.equal(r.note, 'Size- 8 Sankeswari awaj With Naal'); // as written
+  assert.equal(codOrderLine({ ...cod, ...r, payment_type: 'COD' }), 'COD 1999 (Size- 8 Sankeswari awaj With Naal)');
 });
 
 test('"Mohalla" / "Mohan Nagar" stay in the address (Mo. needs a number after it)', () => {
@@ -251,12 +254,15 @@ test('Prepaid amount: typed by hand prints last; a price from the pasted message
 test('real COD messages: size + note without brackets; two "Mobile no-" lines = Mobile 1 and Mobile 2', () => {
   const a = `Name-Dhonde Ajay Ram\nAddress-Khasbag gali Ashti tal-Ashti Dist-Beed\nLandmark-khadkat chowk\nState-Maharashtra\nPincode-414203\nMobile no-9767239595\nMobile no-8830589798\n\nCOD 1299 Size-7 no sanke`;
   const r = parseCodMessage(a);
-  assert.deepEqual([r.amount, r.size, r.note, r.mobile1, r.mobile2], [1299, '7', 'sanke', '9767239595', '8830589798']);
-  assert.equal(codOrderLine({ ...cod, ...r, payment_type: 'COD' }), 'COD 1299 (Size 7 sanke)');
+  assert.deepEqual([r.amount, r.size, r.note, r.mobile1, r.mobile2], [1299, '7', 'Size-7 no sanke', '9767239595', '8830589798']);
+  assert.equal(codOrderLine({ ...cod, ...r, payment_type: 'COD' }), 'COD 1299 (Size-7 no sanke)');
   const b = `GUDDU BAGHEL (Pithli)\nAddress  CHHATTISGARH BASTAR DISTRICT  GAON - RAJNAGAR   KOTWAR PARA\nLandmark RAJNAGAR KOTWAR PARA\nState Chhattisgarh\nPincode -494222\nMobile No 1.  9098415637\nMobile no 2. 7724962813\n\nCOD 1599 (Size - 6 kd awaj)`;
   const q = parseCodMessage(b);
-  assert.deepEqual([q.amount, q.size, q.note, q.mobile1, q.mobile2], [1599, '6', 'kd awaj', '9098415637', '7724962813']);
-  assert.equal(codOrderLine({ ...cod, ...q, payment_type: 'COD' }), 'COD 1599 (Size 6 kd awaj)');
+  assert.deepEqual([q.amount, q.size, q.note, q.mobile1, q.mobile2], [1599, '6', 'Size - 6 kd awaj', '9098415637', '7724962813']);
+  assert.equal(codOrderLine({ ...cod, ...q, payment_type: 'COD' }), 'COD 1599 (Size - 6 kd awaj)');
+  // anything after the amount is kept as written, with or without the word Size
+  const c = parseCodMessage(b.replace('COD 1599 (Size - 6 kd awaj)', 'COD 1599 kd awaj 6 no'));
+  assert.equal(codOrderLine({ ...cod, ...c, payment_type: 'COD' }), 'COD 1599 (kd awaj 6 no)');
 });
 
 test('a phone number that is not in the form is shown as not used', () => {

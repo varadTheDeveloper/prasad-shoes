@@ -76,7 +76,7 @@ Server-only changes do not need a new APK.
   never stored, never parsed, always printed. COD label = the shop's printed COD label: 4 centred header lines
   ("Booking Under …", bold "Customer ID : …, Contract ID – …", "BNPL HUB Pune 411001, Weight : …    Date : DD/MM/YYYY",
   bold "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY") → TO block right (as Prepaid) →
-  bold "COD 1999 (Size 8 pona sanke awaj)" (size + note; COD reader splits "Size 8 pona sanke awaj") → From = shop, left.
+  bold "COD 1999 (Size 8 pona sanke awaj)" – the words after the COD amount are the Note, printed exactly as written (client, 5 Nov 2026: "COD 1299 Size-7 no sanke" → "COD 1299 (Size-7 no sanke)"); Size box = the number only → From = shop, left.
   No barcode (the post office sticks it on). COD font shrinks (14→9 pt, `codSize` in docx.ts) to fit the half page.
 - Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.
 - **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):

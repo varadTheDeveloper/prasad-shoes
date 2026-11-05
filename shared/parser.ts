@@ -752,6 +752,8 @@ interface CodLine {
   date?: string;
   weight?: string;
   amount?: number | null;
+  /** Everything after the COD amount, exactly as written: "Size-7 no sanke" / "Size - 6 kd awaj". */
+  note?: string;
 }
 
 function codLine(raw: string): CodLine {
@@ -768,14 +770,21 @@ function codLine(raw: string): CodLine {
     out.weight = w.weight;
     rest = toAsciiDigits(rest).replace(w.match, ' ');
   }
-  const a = toAsciiDigits(rest).match(COD_AMOUNT_RE);
+  const ascii = toAsciiDigits(rest);
+  const a = ascii.match(COD_AMOUNT_RE);
   if (a) {
     out.amount = parseAmount(a[1]);
-    // "COD 1999 (Size 8 pona sanke awaj)": the size part is kept and read as "Size 8 pona sanke awaj".
-    // …also without brackets: "COD 1299 Size-7 no sanke".
-    const size = rest.match(/\(?\s*((?:size|sizes|साइज|साईज|माप)\b[^)]*)\)?/i);
-    // Otherwise the amount line (often with the amount in words) holds nothing for the address.
-    rest = size ? size[1] : '';
+    // The words after the amount are the COD note, printed exactly as written (client's wish):
+    // "COD 1299 Size-7 no sanke" -> "Size-7 no sanke", "COD 1599 (Size - 6 kd awaj)" -> "Size - 6 kd awaj".
+    let after = ascii.slice(a.index! + a[0].length).replace(/^\s*(?:\/-|\/|=)?\s*/, '').trim();
+    const br = after.match(/^\((.*?)\)?\s*$/s);
+    if (br) after = br[1].trim();
+    after = after.replace(/^[\s,|;:\-–—]+|[\s,|;]+$/g, '').replace(/\s{2,}/g, ' ');
+    // "(Rupees One Thousand Two Hundred Only)" / "-ONE THOUSAND … ONLY": the words are printed from the number.
+    if (after && !(NUMBER_WORDS.test(after.replace(/^(?:rs\.?|rupees?|₹)\s*/i, '')) && /[a-z]{3}/i.test(after)) && /[\p{L}\p{N}]/u.test(after))
+      out.note = after;
+    // The amount line holds nothing for the address.
+    rest = '';
   }
   // "(Rupees One Thousand Two Hundred Only)" – the words are printed from the number instead.
   if (rest.trim() && NUMBER_WORDS.test(rest.trim()) && /[a-z]{3}/i.test(rest)) rest = '';
@@ -798,6 +807,7 @@ function splitCod(text: string) {
   let date = '';
   let weight = '';
   let amount: number | null = null;
+  let codNote = '';
   let mode: 'to' | 'from' = 'to';
   for (const raw of lines) {
     if (!raw) {
@@ -809,6 +819,7 @@ function splitCod(text: string) {
     if (c.date && !date) date = c.date;
     if (c.weight && !weight) weight = c.weight;
     if (c.amount != null && amount === null) amount = c.amount;
+    if (c.note && !codNote) codNote = c.note;
     const line = c.rest;
     if (!line) continue;
     const fh = line.match(FROM_HEAD);
@@ -826,7 +837,7 @@ function splitCod(text: string) {
     }
     (mode === 'to' ? to : from).push(line);
   }
-  return { to: to.join('\n'), from: from.join('\n'), date, weight, amount };
+  return { to: to.join('\n'), from: from.join('\n'), date, weight, amount, codNote };
 }
 
 /** "8 pona sanke awaj" -> size "8" + description "pona sanke awaj". A size without words stays as it is. */
@@ -840,10 +851,12 @@ export function parseCodMessage(text: string): CodParseResult {
   const parts = splitCod(text);
   const r = parseWhatsApp(parts.to);
   const sz = splitSize(r.size);
+  // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
+  const noteSize = parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ?? '';
   const out: CodParseResult = {
     ...r,
-    size: sz.size,
-    note: sz.note || r.note,
+    size: sz.size || noteSize,
+    note: parts.codNote || sz.note || r.note,
     amount: parts.amount ?? r.amount,
     booking_date: parts.date,
     weight: parts.weight,

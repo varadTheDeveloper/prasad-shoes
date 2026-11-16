@@ -13,7 +13,7 @@ Owner (Varad) wants things explained in simple language, and the plan explained 
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
 - `app/` – Expo SDK 58 (Expo Router, TanStack Query): Android APK + website from the same code.
   Home = first only two big buttons PREPAID / COD (stacked, colours `TYPE_COLOR` in theme.ts, `components/TypeChooser.tsx`), then the paste screen for that type
-  ("‹ Back" in the header → the two buttons, also Android back / browser ←, "Discard this order?" if unsaved; counts and "Print today's labels" for that type, `/api/stats?type=`); Orders = PREPAID | COD switch (separate lists,
+  ("‹ Back" in the header → the two buttons, also Android back / browser ←, "Discard this order?" if unsaved; counts and "Print today's labels" for that type, `/api/stats?type=`); Orders = the two PREPAID / COD buttons first, then that list (separate lists,
   `type=` on `/api/orders`, `/orders/ids`, export; list returns `counts`), List (print) / Table (owner, Excel .xlsx export: `services/xlsx.ts`, all details, mobiles as text; the Excel box has a tick "Also send to email" → `POST /api/orders/export/email`, same safety as Send to Owner, audit `EXCEL_EMAIL`).
 - `deploy/` – AWS server scripts (written for Lightsail, used on EC2): `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
 
@@ -86,8 +86,11 @@ Server-only changes do not need a new APK.
   No barcode (the post office sticks it on). Font shrinks (14→9 pt, `labelSize` in docx.ts) to fit the half page.
 - Print layout (docx.ts + printHtml.ts, identical): each label sits in the MIDDLE of its half of the paper (top label row 8 mm → centred at 74.25 mm,
   blank row to the cut line; blank row under the cut line, bottom label centred at 222.75 mm); one font size per label (`labelSize`, 14→9 pt).
-- Orders list: PREPAID | COD switch first (never mixed; last choice remembered on the device), then From–To dates, Not printed / Printed
-  (tap again = both), 50 per page; "Select all" uses `/api/orders/ids` (with `type`).
+- Orders tab (client, 17 Nov 2026): opens with ONLY the two big PREPAID / COD buttons (TypeChooser, each with "N not printed" from
+  `/api/stats?type=`); a bottom-bar tap always starts there. The chosen list (never mixed): header "‹ Back" + coloured "PREPAID orders" /
+  "COD orders" (List / Table on the right); Back, Android back and browser ← return to the buttons, asking "Clear the selection?" when
+  orders are ticked; an order page and back keeps the list. Home "Print today's labels" opens a type's list directly (`type` param).
+  Then From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids` (with `type`).
 - **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):
   `POST /api/labels/email {orderIds, client_request_id}` → same `buildLabelsDocx` file as Download Word, one email to
   `OWNER_EMAIL` (comma-separated list allowed; server/.env only; the app never sends a recipient) via the **Resend** HTTP API with built-in fetch, no

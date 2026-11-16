@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import { api, apiFile, ApiError } from '@/lib/api';
@@ -12,7 +12,7 @@ import { useIsAdmin, usePermission } from '@/lib/auth';
 import { Banner, Button, Checkbox, Chip, Header, Input, Loading, Muted, useWide } from '@/components/ui';
 import { DateField } from '@/components/DateField';
 import { ExcelSheet } from '@/components/ExcelSheet';
-import { TypeSwitch } from '@/components/TypeChooser';
+import { DiscardSheet, TypeChooser } from '@/components/TypeChooser';
 import { payText, shiftISO, shortDateTime, todayISO } from '@/lib/format';
 import { setSelection } from '@/lib/selection';
 import { pagesFor } from '@shared/label';
@@ -33,9 +33,10 @@ function useDebounced<T>(v: T, ms: number) {
 }
 
 /**
- * Screen 6 · Orders: Prepaid and COD orders in SEPARATE lists (client, 16 Nov 2026) – a PREPAID | COD
- * switch at the top; From – To dates, printed status, search, Select all, Print / Word / email and
- * Excel all work inside the chosen type. 50 at a time; Select all = every matching order.
+ * Screen 6 · Orders: Prepaid and COD orders in SEPARATE lists (client, 16 Nov 2026). The tab opens with only
+ * the two big PREPAID / COD buttons (client, 17 Nov 2026); the chosen list has "‹ Back" to them (also Android
+ * back / browser ←; asks first when orders are ticked). From – To dates, printed status, search, Select all,
+ * Print / Word / email and Excel all work inside the chosen type. 50 at a time; Select all = every matching order.
  */
 export default function Orders() {
   const params = useLocalSearchParams<{ preset?: string; type?: string; at?: string }>();
@@ -46,17 +47,21 @@ export default function Orders() {
   const wide = useWide();
   const today = todayISO();
 
-  // Which list: PREPAID or COD (remembered on this device; Home can open a given one).
-  const [ordType, setOrdType] = useState<PaymentType>('PREPAID');
-  useEffect(() => {
-    getPref('orders_type').then((v) => (v === 'COD' || v === 'PREPAID') && !params.type && setOrdType(v));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const pickType = (x: PaymentType) => {
-    setOrdType(x);
-    setPref('orders_type', x);
-  };
+  // Which list: null = the two big buttons; Home's "Print today's labels" opens a given one directly.
+  const [chosen, setChosen] = useState<PaymentType | null>(null);
+  const ordType: PaymentType = chosen ?? 'PREPAID'; // for the queries while the buttons show (they are not run then)
   const tc = TYPE_COLOR[ordType];
+  const web = Platform.OS === 'web';
+  const histKey = 'psOrdersType'; // our mark on the browser history entry of a list
+  function pickType(x: PaymentType) {
+    setChosen(x);
+    // Website: one history entry for the list, so the browser's ← comes back to the two buttons.
+    if (web) {
+      const h = window.history.state ?? {};
+      if (h[histKey]) window.history.replaceState({ ...h, [histKey]: x }, '');
+      else window.history.pushState({ ...h, [histKey]: x }, '');
+    }
+  }
 
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -118,10 +123,10 @@ export default function Orders() {
       api<{ orders: Order[]; total: number; counts?: Record<PaymentType, number> }>('GET', `/orders?${filterQs}&limit=${PAGE}&page=${pageParam}`),
     initialPageParam: 1,
     getNextPageParam: (last, all) => (all.length * PAGE < last.total ? all.length + 1 : undefined),
+    enabled: !!chosen,
   });
   const orders = list.data?.pages.flatMap((p) => p.orders) ?? [];
   const total = list.data?.pages[0]?.total ?? 0;
-  const counts = list.data?.pages[0]?.counts;
   const selectable = (o: Order) => !o.deleted_at && (!o.is_printed || canReprint);
 
   const olderQs = new URLSearchParams({ type: ordType, to: shiftISO(today, -1), printed: 'no', limit: '1' }).toString();
@@ -129,7 +134,7 @@ export default function Orders() {
   const older = useQuery({
     queryKey: ['orders', 'older-unprinted', olderQs],
     queryFn: () => api<{ orders: Order[]; total: number }>('GET', `/orders?${olderQs}`),
-    enabled: showOlder,
+    enabled: showOlder && !!chosen,
   });
   const olderCount = showOlder ? (older.data?.total ?? 0) : 0;
 
@@ -168,6 +173,91 @@ export default function Orders() {
       return n;
     });
   };
+
+  // Back (header button, Android back, browser ←): to the two buttons; ticked orders ask first.
+  const selectedRef = useRef(0);
+  selectedRef.current = selected.size;
+  const [askClear, setAskClear] = useState(false);
+  const leavingRef = useRef(false);
+  function leave() {
+    setAskClear(false);
+    setSelected(new Set());
+    setAllIds(null);
+    setSendMsg(null);
+    setExporting('');
+    setChosen(null);
+  }
+  /** Leave the list; on the website through its history entry, so ← / → stay in step. */
+  function leaveNow() {
+    if (web && window.history.state?.[histKey]) {
+      leavingRef.current = true;
+      window.history.back(); // the popstate below calls leave()
+    } else leave();
+  }
+  function goBack() {
+    if (selectedRef.current > 0) setAskClear(true);
+    else leaveNow();
+  }
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    if (!chosen || !web) return;
+    const onPop = () => {
+      // Back from an order page to this list lands on the list's own entry: nothing to do.
+      if (window.history.state?.[histKey]) return;
+      if (leavingRef.current || selectedRef.current === 0) {
+        leavingRef.current = false;
+        leave();
+      } else {
+        // Browser ← with ticked orders: stay on the list and ask.
+        window.history.pushState({ ...(window.history.state ?? {}), [histKey]: chosen }, '');
+        setAskClear(true);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen]);
+  // Android back: only while this screen is in front (an open order page handles its own back).
+  useFocusEffect(
+    useCallback(() => {
+      if (!chosen || web) return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        goBackRef.current();
+        return true; // handled: stay in the app
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chosen]),
+  );
+  // Opening the Orders tab from the bottom bar always starts at the two buttons.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsub = navigation.addListener('tabPress' as any, () => {
+      if (!navigation.isFocused()) leave();
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation]);
+
+  // Numbers on the two buttons: orders of each type not printed yet (all dates).
+  const notPrinted = useQuery({
+    queryKey: ['stats', 'orders-chooser'],
+    queryFn: async () => {
+      const [p, c] = await Promise.all([
+        api<{ notPrinted: number }>('GET', '/stats?type=PREPAID'),
+        api<{ notPrinted: number }>('GET', '/stats?type=COD'),
+      ]);
+      return { PREPAID: p.notPrinted, COD: c.notPrinted } as Record<PaymentType, number>;
+    },
+    enabled: !chosen,
+    staleTime: 0, // fresh numbers every time the buttons show again
+  });
+  const chooserNotes = notPrinted.data
+    ? (Object.fromEntries(
+        (['PREPAID', 'COD'] as PaymentType[]).map((x) => [x, notPrinted.data[x] ? t('{n} not printed', { n: notPrinted.data[x] }) : t('All printed')]),
+      ) as Record<PaymentType, string>)
+    : { PREPAID: '', COD: '' };
 
   // Owner: "⬇ Excel" opens a box: Download, with a tick to also email the same file (remembered on this device).
   const [excelOpen, setExcelOpen] = useState(false);
@@ -267,7 +357,6 @@ export default function Orders() {
 
   const filters = (
     <View style={[st.filters, { maxWidth: wide ? 1100 : 720 }]}>
-      <TypeSwitch value={ordType} onChange={pickType} counts={counts} />
       {deleted ? (
         <Pressable onPress={() => setDeleted(false)} style={st.deletedBar} hitSlop={6}>
           <Text style={{ color: C.danger, fontSize: 14, fontWeight: '700' }}>{t('Showing deleted orders · tap to go back')}</Text>
@@ -387,10 +476,33 @@ export default function Orders() {
   };
 
 
+  if (!chosen) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.ground }}>
+        <Header title={t('Orders')} />
+        <View style={st.chooser}>
+          <Muted style={{ marginBottom: 14 }}>{t('Pick which orders to see')}</Muted>
+          <TypeChooser onPick={pickType} notes={chooserNotes} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: C.ground }}>
+      <DiscardSheet
+        visible={askClear}
+        title={t('Clear the selection?')}
+        text={t('{n} ticked orders will be unticked.', { n: selected.size })}
+        discardLabel={t('Clear')}
+        keepLabel={t('Keep')}
+        onDiscard={leaveNow}
+        onKeep={() => setAskClear(false)}
+      />
       <Header
-        title={t('Orders')}
+        title={chosen === 'COD' ? t('COD orders') : t('PREPAID orders')}
+        titleColor={tc.main}
+        onBack={goBack}
         right={
           admin ? (
             <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -500,6 +612,7 @@ export default function Orders() {
 }
 
 const st = StyleSheet.create({
+  chooser: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: 18, paddingTop: 22 },
   filters: { width: '100%', alignSelf: 'center', marginBottom: 4 },
   card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 12, marginBottom: 10 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 8 },

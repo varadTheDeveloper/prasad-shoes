@@ -1,7 +1,6 @@
 // PREPAID / COD everywhere in one look (client, 16 Nov 2026):
-//   - TypeChooser: Home opens with only these two big buttons, one above the other.
-//   - DiscardSheet: "Discard this order?" when Back would lose an unsaved paste.
-//   - TypeSwitch: PREPAID | COD switch with counts (Orders).
+//   - TypeChooser: Home and Orders open with only these two big buttons, one above the other (Orders: 17 Nov 2026).
+//   - DiscardSheet: "Discard this order?" when Back would lose an unsaved paste (Orders: "Clear the selection?").
 // Colours: TYPE_COLOR in lib/theme.ts.
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PaymentType } from '@shared/types';
@@ -11,8 +10,8 @@ import { t } from '@/lib/i18n';
 export const TYPES: PaymentType[] = ['PREPAID', 'COD'];
 export const typeName = (x: PaymentType) => (x === 'COD' ? 'COD' : 'PREPAID');
 
-/** Two big buttons, stacked: PREPAID, then COD. */
-export function TypeChooser({ onPick }: { onPick: (x: PaymentType) => void }) {
+/** Two big buttons, stacked: PREPAID, then COD. `notes` replaces the small line under a button (Orders: "12 not printed"). */
+export function TypeChooser({ onPick, notes }: { onPick: (x: PaymentType) => void; notes?: Partial<Record<PaymentType, string>> }) {
   return (
     <View style={{ gap: 16 }}>
       {TYPES.map((x) => {
@@ -26,7 +25,7 @@ export function TypeChooser({ onPick }: { onPick: (x: PaymentType) => void }) {
           >
             <Text style={[st.bigTitle, { color: c.on }]}>{typeName(x)}</Text>
             <Text style={[st.bigSub, { color: c.onSub }]}>
-              {x === 'COD' ? t('Cash on delivery – paste the COD booking message') : t('Paid orders – paste the customer’s WhatsApp address')}
+              {notes?.[x] ?? (x === 'COD' ? t('Cash on delivery – paste the COD booking message') : t('Paid orders – paste the customer’s WhatsApp address'))}
             </Text>
           </Pressable>
         );
@@ -35,49 +34,38 @@ export function TypeChooser({ onPick }: { onPick: (x: PaymentType) => void }) {
   );
 }
 
-/** Back from the paste screen with an unsaved order: Discard / Keep editing. */
-export function DiscardSheet({ visible, onDiscard, onKeep }: { visible: boolean; onDiscard: () => void; onKeep: () => void }) {
+/** Back with something not finished: Discard / Keep editing (Home), or other words (Orders: Clear / Keep). */
+export function DiscardSheet({
+  visible,
+  onDiscard,
+  onKeep,
+  title,
+  text,
+  discardLabel,
+  keepLabel,
+}: {
+  visible: boolean;
+  onDiscard: () => void;
+  onKeep: () => void;
+  title?: string;
+  text?: string;
+  discardLabel?: string;
+  keepLabel?: string;
+}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeep}>
       <Pressable style={st.backdrop} onPress={onKeep} />
       <View style={st.sheet}>
-        <Text style={st.sheetTitle}>{t('Discard this order?')}</Text>
-        <Text style={st.sheetText}>{t('The pasted message and the details you typed are not saved yet.')}</Text>
+        <Text style={st.sheetTitle}>{title ?? t('Discard this order?')}</Text>
+        <Text style={st.sheetText}>{text ?? t('The pasted message and the details you typed are not saved yet.')}</Text>
         <Pressable onPress={onDiscard} style={({ pressed }) => [st.sheetBtn, { backgroundColor: pressed ? '#B91C1C' : C.danger }]}>
-          <Text style={[st.sheetBtnText, { color: '#fff' }]}>{t('Discard')}</Text>
+          <Text style={[st.sheetBtnText, { color: '#fff' }]}>{discardLabel ?? t('Discard')}</Text>
         </Pressable>
         <Pressable onPress={onKeep} style={({ pressed }) => [st.sheetBtn, st.sheetBtnLine, pressed && { backgroundColor: C.pressed }]}>
-          <Text style={[st.sheetBtnText, { color: C.action }]}>{t('Keep editing')}</Text>
+          <Text style={[st.sheetBtnText, { color: C.action }]}>{keepLabel ?? t('Keep editing')}</Text>
         </Pressable>
       </View>
     </Modal>
-  );
-}
-
-/** PREPAID | COD switch with the number of orders of each (Orders screen). */
-export function TypeSwitch({ value, onChange, counts }: { value: PaymentType; onChange: (x: PaymentType) => void; counts?: Partial<Record<PaymentType, number>> }) {
-  return (
-    <View style={st.switch}>
-      {TYPES.map((x) => {
-        const c = TYPE_COLOR[x];
-        const on = x === value;
-        const n = counts?.[x];
-        return (
-          <Pressable
-            key={x}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(x)}
-            style={[st.switchItem, on ? { backgroundColor: c.main, borderColor: c.main } : { backgroundColor: C.card, borderColor: c.border }]}
-          >
-            <Text style={[st.switchText, { color: on ? c.on : c.main }]}>
-              {typeName(x)}
-              {n === undefined ? '' : ` (${n})`}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -102,9 +90,6 @@ const st = StyleSheet.create({
   sheetBtn: { borderRadius: R.button, paddingVertical: 13, alignItems: 'center', marginTop: 8 },
   sheetBtnLine: { borderWidth: 1, borderColor: C.inputBorder },
   sheetBtnText: { fontSize: 16, fontWeight: '700' },
-  switch: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  switchItem: { flex: 1, borderWidth: 1.5, borderRadius: R.button, paddingVertical: 12, alignItems: 'center' },
-  switchText: { fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
   badge: { borderWidth: 1, borderRadius: R.pill, paddingVertical: 2, paddingHorizontal: 8, alignSelf: 'flex-start' },
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 });

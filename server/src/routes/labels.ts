@@ -21,7 +21,8 @@ const LABEL_COLS = `id, ship_name, address, landmark, district, state, pincode, 
   payment_type, amount, is_printed, created_by, weight, raw_message`;
 /** Columns for the label, with table prefix p ('o.' or ''); the booking date as 'YYYY-MM-DD' text. */
 const labelCols = (p = '') =>
-  `${LABEL_COLS.split(',').map((c) => p + c.trim()).join(', ')}, to_char(${p}booking_date, 'YYYY-MM-DD') AS booking_date`;
+  `${LABEL_COLS.split(',').map((c) => p + c.trim()).join(', ')}, to_char(${p}booking_date, 'YYYY-MM-DD') AS booking_date, ` +
+  `to_char(${p}created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS created_date`;
 
 function istDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()); // 2026-10-18

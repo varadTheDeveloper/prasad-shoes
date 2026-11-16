@@ -161,7 +161,7 @@ export default function OrderDetail() {
       {msg ? <Banner kind={msg.kind} text={msg.text} /> : null}
       {!canEdit && !o.deleted_at ? <Banner kind="info" text={t('You can view this order but not edit it.')} /> : null}
 
-      <ToPreview order={{ ...formToLabel(form), raw_message: o?.raw_message ?? '' }} />
+      <ToPreview order={{ ...formToLabel(form), raw_message: o?.raw_message ?? '', created_date: o?.created_at ? new Date(Date.parse(o.created_at) + 5.5 * 3600e3).toISOString().slice(0, 10) : null }} />
       <AddressNotes
         check={pin.check}
         failed={pin.failed}

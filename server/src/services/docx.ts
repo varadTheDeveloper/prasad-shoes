@@ -3,21 +3,18 @@
 // Page layout (fixed, the same in MS Word, WPS Office and LibreOffice):
 //
 //   ┌──────────────────────────── A4 210 × 297 mm ────────────────────────────┐
-//   │                                           TO, <name>   (right, top)      │
-//   │                                           address / pin / mobile         │
+//   │                 Booking Under … / Customer ID … / BNPL HUB … (centred)   │
+//   │                 COD FOR RUPEES …                 (COD only)              │
+//   │                                           TO, <name>   (right)           │
+//   │                                           address / mobile / pin         │
 //   │                                           PREPAID (…) / COD 1299 (…)     │
-//   │  From :-  (left, right under the TO block)                               │
-//   │  PRASAD SHOES …                                                          │
-//   │                       (blank – room to cut)                              │
+//   │  From :-  PRASAD SHOES …  (left)                                         │
 //   ├ - - - - - - - - - - - - cut line at exactly 148.5 mm - - - - - - - - - - ┤
-//   │                       (15 mm blank)                                      │
-//   │                                           TO, <name>                     │
-//   │                                           …                              │
-//   │  From :-                                                                 │
-//   │  PRASAD SHOES …                                                          │
-//   │                       (blank)                                            │
+//   │                 (the second label, laid out the same way)                │
 //   └──────────────────────────────────────────────────────────────────────────┘
 //
+// Each label sits in the MIDDLE of its half of the paper (client, 16 Nov 2026: the top label used to
+// hug the paper edge with a big gap under it), so both halves look the same whatever the length.
 // Each page is its own small table with EXACT row heights (rows cannot grow or move), and a
 // page break comes before the next page. Every page starts with the same 1-point paragraph, so
 // all pages line up identically and the cut line is always at 148.5 mm.
@@ -37,10 +34,9 @@ import {
   WidthType,
 } from 'docx';
 import {
-  codHeadLines,
-  codOrderLine,
   fromLines,
-  orderLine,
+  headLines,
+  labelOrderLine,
   toLines,
   type LabelOrder,
   type LabelShop,
@@ -61,7 +57,6 @@ const TOP_HALF = HALF - MARGIN_T - TOP_PARA; // rows of the top half end exactly
 const SPARE = 180; // ~3 mm left unused at the bottom so no program ever pushes a row to the next page
 const BOTTOM_HALF = PAGE_H - MARGIN_B - HALF - SPARE;
 const FROM_GAP = 340; // ~6 mm between the COD/PREPAID line and "From :-"
-const CUT_GAP = 850; // 15 mm blank band below the cut line before the bottom label starts
 const COL_W = PAGE_W - 2 * MARGIN_LR;
 
 const font = { ascii: FONT, hAnsi: FONT, cs: FONT, eastAsia: FONT };
@@ -81,85 +76,67 @@ function run(text: string, size: number, opts: { bold?: boolean; underline?: boo
 const para = (align: (typeof AlignmentType)[keyof typeof AlignmentType], children: TextRun[], extra: Record<string, unknown> = {}) =>
   new Paragraph({ alignment: align, spacing: { before: 0, after: 0, line: 264 }, children, ...extra });
 
-/** Very long addresses get a smaller font so the TO block always fits its fixed space. */
-export function sizeFor(o: LabelOrder): number {
-  const lines = [o.ship_name, ...toLines(o), orderLine(o)].reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 55)), 0);
-  if (lines <= 11) return SIZE; // 14 pt
-  if (lines <= 13) return 24; // 12 pt
-  return 20; // 10 pt
+// ---- one label (COD and Prepaid, the shop's printed layout) -------------------------------------
+//   header lines, centred (Customer ID line bold; COD adds the bold "COD FOR RUPEES" line) ->
+//   "TO, <name>" + address, right-aligned -> "COD 1999 (…)" / "PREPAID (…)" (bold) ->
+//   "From :-" + the shop, left-aligned.
+const TO_GAP = 200; // header -> TO
+const LINE_GAP = 160; // address -> COD / PREPAID line
+
+// Where each label sits: in the middle of its half of the PAPER (0–148.5 mm and 148.5–297 mm).
+// Top half: the label row starts at 8 mm (page margin) and is as tall as needed to centre it at
+// 74.25 mm; a blank row under it ends at the cut line (its dashed bottom border).
+// Bottom half: a blank row under the cut line, then the label row, centred at 222.75 mm.
+const TOP_ROW = 2 * (HALF / 2 - (MARGIN_T + TOP_PARA)); // 7511 twips ≈ 132.5 mm
+const TOP_SPACER = TOP_HALF - TOP_ROW; // ≈ 8 mm above the cut line
+const BOTTOM_ROW = 2 * (BOTTOM_HALF - HALF / 2); // 7151 twips ≈ 126 mm
+const BOTTOM_SPACER = BOTTOM_HALF - BOTTOM_ROW; // ≈ 11 mm below the cut line
+// Height the text may use: the smaller label row minus 4 mm on each side, so there is always at
+// least ~12 mm of blank paper next to the cut line and the paper edges.
+const LABEL_ROOM = Math.min(TOP_ROW, BOTTOM_ROW) - 2 * 227;
+
+/** Every line of one label, top to bottom (used for the font size and by the print page). */
+export function labelLines(o: LabelOrder, shop: LabelShop): string[] {
+  return [...headLines(o), `TO, ${o.ship_name}`, ...toLines(o), labelOrderLine(o), 'From :-', ...fromLines(shop)];
 }
 
-function toBlock(o: LabelOrder, spaceBefore: number): Paragraph[] {
-  const size = sizeFor(o);
-  return [
-    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], {
-      spacing: { before: spaceBefore, after: 0, line: 264 },
-    }),
-    ...toLines(o).map((l) => para(AlignmentType.RIGHT, [run(l, size)])),
-    // The COD / PREPAID line right under the TO address
-    para(AlignmentType.RIGHT, [run(orderLine(o), size, { bold: true })], { spacing: { before: 160, after: 0, line: 264 } }),
-  ];
-}
-
-function fromBlock(shop: LabelShop): Paragraph[] {
-  return [
-    para(AlignmentType.LEFT, [run('From :-', SIZE, { bold: true, underline: true })], { spacing: { before: FROM_GAP, after: 0, line: 264 } }),
-    ...fromLines(shop).map((l) => para(AlignmentType.LEFT, [run(l, SIZE)])),
-  ];
-}
-
-// ---- COD label (India Post) ---------------------------------------------------------------------
-// Same half-page and cut line as Prepaid; the shop's printed COD layout inside:
-//   4 header lines, centred (Customer ID line and the COD FOR RUPEES line bold) ->
-//   "TO, <name>" + address, right-aligned (as Prepaid) -> "COD 1999 (Size 8 …)" (bold, as the Prepaid line) ->
-//   "From :-" + the shop, left-aligned (as Prepaid).
-// The COD label has 4 more lines, so its font is picked to fit the half page (14 pt down to 9 pt).
-const COD_TO_GAP = 200;
-const COD_LINE_GAP = 160; // as the Prepaid "PREPAID (…)" line
-// Height the text may use in each half (the smaller of the two halves, minus a safety band).
-const COD_ROOM = Math.min(TOP_HALF - 120, BOTTOM_HALF - CUT_GAP) - 300;
-
-/** Biggest font (half-points) at which every COD line fits in its half of the page. */
-export function codSize(o: LabelOrder, shop: LabelShop): number {
-  const lines = [...codHeadLines(o), `TO, ${o.ship_name}`, ...toLines(o), codOrderLine(o), 'From :-', ...fromLines(shop)];
+/** Biggest font (half-points, 14 pt down to 9 pt) at which every line of the label fits its half. */
+export function labelSize(o: LabelOrder, shop: LabelShop): number {
+  const lines = labelLines(o, shop);
   for (const size of [28, 26, 24, 22, 20, 18]) {
     const perLine = Math.floor((55 * 28) / size); // ~55 characters per line at 14 pt
     const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
     // Nirmala UI line = font size x 1.33, x 1.1 for the paragraph line spacing (264/240); 20 twips per point
-    const height = rows * (size / 2) * 20 * 1.33 * 1.1 + COD_TO_GAP + COD_LINE_GAP + FROM_GAP;
-    if (height <= COD_ROOM) return size;
+    const height = rows * (size / 2) * 20 * 1.33 * 1.1 + TO_GAP + LINE_GAP + FROM_GAP;
+    if (height <= LABEL_ROOM) return size;
   }
   return 18;
 }
 
-function codBlock(o: LabelOrder, shop: LabelShop, spaceBefore: number): Paragraph[] {
-  const size = codSize(o, shop);
+/** The text of one label (COD or Prepaid). */
+function labelBlock(o: LabelOrder, shop: LabelShop): Paragraph[] {
+  const size = labelSize(o, shop);
   const at = (before: number) => (before ? { spacing: { before, after: 0, line: 264 } } : {});
   return [
-    ...codHeadLines(o).map((l, i) => para(AlignmentType.CENTER, [run(l, size, { bold: i === 1 || i === 3 })], at(i === 0 ? spaceBefore : 0))),
-    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], at(COD_TO_GAP)),
+    ...headLines(o).map((l, i) => para(AlignmentType.CENTER, [run(l, size, { bold: i === 1 || i === 3 })])),
+    para(AlignmentType.RIGHT, [run('TO, ', size, { bold: true }), run(o.ship_name, size, { bold: true })], at(TO_GAP)),
     ...toLines(o).map((l) => para(AlignmentType.RIGHT, [run(l, size)])),
-    para(AlignmentType.RIGHT, [run(codOrderLine(o), size, { bold: true })], at(COD_LINE_GAP)),
+    para(AlignmentType.RIGHT, [run(labelOrderLine(o), size, { bold: true })], at(LINE_GAP)),
     para(AlignmentType.LEFT, [run('From :-', size, { bold: true, underline: true })], at(FROM_GAP)),
     ...fromLines(shop).map((l) => para(AlignmentType.LEFT, [run(l, size)])),
   ];
 }
 
-/** The text of one label: the COD template for COD orders, the (unchanged) Prepaid one otherwise. */
-function labelBlock(o: LabelOrder, shop: LabelShop, spaceBefore: number): Paragraph[] {
-  if (o.payment_type === 'COD') return codBlock(o, shop, spaceBefore);
-  return [...toBlock(o, spaceBefore), ...fromBlock(shop)];
-}
-
 const NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 const DASHED = { style: BorderStyle.DASHED, size: 8, color: '000000' };
+const blank = () => [new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: 'exact' as any }, children: [new TextRun({ text: '', size: 2 })] })];
 
 // No cell margins (padding): WPS Office adds them on top of the EXACT row height, which pushed the
-// bottom half onto the next page. The gaps come from paragraph spacing instead.
-function cell(children: Paragraph[], align: typeof VerticalAlign.TOP | typeof VerticalAlign.BOTTOM, cutLineBelow = false) {
+// bottom half onto the next page. The gaps come from the row heights instead.
+function cell(children: Paragraph[], cutLineBelow = false) {
   return new TableCell({
-    children: children.length ? children : [new Paragraph({ children: [] })],
-    verticalAlign: align,
+    children: children.length ? children : blank(),
+    verticalAlign: VerticalAlign.CENTER,
     width: { size: COL_W, type: WidthType.DXA },
     borders: { top: NONE, left: NONE, right: NONE, bottom: cutLineBelow ? DASHED : NONE },
   });
@@ -167,20 +144,18 @@ function cell(children: Paragraph[], align: typeof VerticalAlign.TOP | typeof Ve
 
 const row = (height: number, c: TableCell) => new TableRow({ height: { value: height, rule: HeightRule.EXACT }, cantSplit: true, children: [c] });
 
-/** One half of the page: TO block (right), the COD/PREPAID line, then From (left) right under it.
- *  The rest of the half stays blank, so there is plenty of room around the cut line. */
-function half(o: LabelOrder | null, shop: LabelShop, height: number, cutLineBelow: boolean, spaceBefore: number): TableRow[] {
-  return [row(height, cell(o ? labelBlock(o, shop, spaceBefore) : [], VerticalAlign.TOP, cutLineBelow))];
-}
-
 function pageTable(top: LabelOrder | null, bottom: LabelOrder | null, shop: LabelShop) {
   return new Table({
     width: { size: COL_W, type: WidthType.DXA },
     columnWidths: [COL_W],
     borders: TableBorders.NONE,
     // The dashed cut line is the bottom edge of the top half = exactly 148.5 mm from the top.
-    // Both halves start their TO block the same distance from their top edge (paper edge / cut line).
-    rows: [...half(top, shop, TOP_HALF, true, 120), ...half(bottom, shop, BOTTOM_HALF, false, CUT_GAP)],
+    rows: [
+      row(TOP_ROW, cell(top ? labelBlock(top, shop) : [])),
+      row(TOP_SPACER, cell(blank(), true)),
+      row(BOTTOM_SPACER, cell(blank())),
+      row(BOTTOM_ROW, cell(bottom ? labelBlock(bottom, shop) : [])),
+    ],
   });
 }
 

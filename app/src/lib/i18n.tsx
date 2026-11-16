@@ -241,6 +241,17 @@ const MR: Record<string, string> = {
 
   // ---- label preview (only the screen words – the label itself stays English)
   'WILL PRINT · COD': 'असे छापले जाईल · COD',
+  'WILL PRINT · PREPAID': 'असे छापले जाईल · PREPAID',
+  // ---- PREPAID / COD chooser (Home) and switch (Orders)
+  'Pick the order type to start': 'सुरू करण्यासाठी ऑर्डरचा प्रकार निवडा',
+  'Cash on delivery – paste the COD booking message': 'डिलिव्हरीवेळी पैसे – COD बुकिंग मेसेज पेस्ट करा',
+  'Paid orders – paste the customer’s WhatsApp address': 'पैसे भरलेल्या ऑर्डर – ग्राहकाचा WhatsApp पत्ता पेस्ट करा',
+  'PREPAID orders': 'PREPAID ऑर्डर',
+  'COD orders': 'COD ऑर्डर',
+  Change: 'बदला',
+  'Weight (optional)': 'वजन (ऐच्छिक)',
+  'Booking date (optional)': 'बुकिंग तारीख (ऐच्छिक)',
+  'Order date': 'ऑर्डरची तारीख',
   'WILL PRINT': 'असे छापले जाईल',
   '(bottom half empty)': '(खालचा अर्धा भाग रिकामा)',
   'The address appears here after you paste': 'पेस्ट केल्यावर पत्ता इथे दिसेल',

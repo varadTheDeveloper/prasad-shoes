@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -7,9 +7,10 @@ import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { setSelection } from '@/lib/selection';
 import { Button, Card, LangSwitch, ListRow, Muted, Page, Pill, Row, SectionTitle, useWide } from '@/components/ui';
 import { CheckBox, PasteBox, PasteDuplicate, PasteForm, SaveBar, usePasteOrder } from '@/components/PasteOrder';
+import { TypeChooser, TypeHeader } from '@/components/TypeChooser';
 import { dayTime, payText, shiftISO, time, todayISO } from '@/lib/format';
 import { C } from '@/lib/theme';
-import type { Order } from '@shared/types';
+import type { Order, PaymentType } from '@shared/types';
 import { t } from '@/lib/i18n';
 
 interface Stats {
@@ -22,8 +23,9 @@ interface Stats {
 }
 
 /**
- * Home: the paste screen. Paste → check the label → Save; and one button to print today's labels.
- * Today's numbers sit in a small strip at the top.
+ * Home: first only two big buttons, PREPAID and COD (client, 16 Nov 2026). After a pick: the paste
+ * screen for that type (paste → check the label → Save), today's numbers for that type and one
+ * button to print that type's labels. "Change" goes back to the two buttons.
  */
 export default function Home() {
   const { me, logout } = useAuth();
@@ -32,16 +34,23 @@ export default function Home() {
   const canPrint = usePermission('LABEL_PRINT');
   const wide = useWide();
   const s = usePasteOrder();
+  // The type picked on the two-button screen (null = show the two buttons).
+  const [chosen, setChosen] = useState<PaymentType | null>(null);
+  function pick(x: PaymentType) {
+    s.setType(x);
+    setChosen(x);
+  }
+  const typeQs = chosen ? { type: chosen } : ({} as Record<string, string>);
 
-  const stats = useQuery({ queryKey: ['stats'], queryFn: () => api<Stats>('GET', '/stats') });
+  const stats = useQuery({ queryKey: ['stats', chosen], queryFn: () => api<Stats>('GET', `/stats${chosen ? `?type=${chosen}` : ''}`) });
   const today = todayISO();
-  const todayQs = new URLSearchParams({ from: today, to: today, printed: 'no' }).toString();
+  const todayQs = new URLSearchParams({ from: today, to: today, printed: 'no', ...typeQs }).toString();
   const unprintedToday = useQuery({
     queryKey: ['orders', 'home-unprinted-today', todayQs],
     queryFn: () => api<{ ids: number[] }>('GET', `/orders/ids?${todayQs}`),
     enabled: canPrint,
   });
-  const olderQs = new URLSearchParams({ to: shiftISO(today, -1), printed: 'no', limit: '1' }).toString();
+  const olderQs = new URLSearchParams({ to: shiftISO(today, -1), printed: 'no', limit: '1', ...typeQs }).toString();
   const older = useQuery({
     queryKey: ['orders', 'older-unprinted', olderQs],
     queryFn: () => api<{ orders: Order[]; total: number }>('GET', `/orders?${olderQs}`),
@@ -82,7 +91,7 @@ export default function Home() {
             onPress={printToday}
           />
           {olderCount > 0 ? (
-            <Pressable onPress={() => router.push({ pathname: '/orders', params: { preset: 'unprinted', at: String(Date.now()) } })} hitSlop={6}>
+            <Pressable onPress={() => router.push({ pathname: '/orders', params: { preset: 'unprinted', type: chosen ?? '', at: String(Date.now()) } })} hitSlop={6}>
               <Text style={{ color: C.action, fontSize: 14, fontWeight: '600', marginTop: 8 }}>
                 {t(olderCount === 1 ? '{n} older order not printed – open Orders' : '{n} older orders not printed – open Orders', { n: olderCount })}
               </Text>
@@ -157,14 +166,31 @@ export default function Home() {
     );
   }
 
+  if (!chosen) {
+    // First screen: only the two big buttons (and the small account links under them).
+    return (
+      <Page title={t('Home')}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 6 }}>{t('Namaste, {name}', { name: me?.name })}</Text>
+        <Muted style={{ marginBottom: 16 }}>{t('Pick the order type to start')}</Muted>
+        <TypeChooser onPick={pick} />
+        <LangSwitch style={{ marginTop: 32, width: '100%', maxWidth: 320, alignSelf: 'center' }} />
+        <Row style={{ justifyContent: 'center', marginTop: 12 }} gap={24}>
+          <Button kind="link" title={t('Change password')} onPress={() => router.push('/change-password')} />
+          <Button kind="link" title={t('Log out')} onPress={logout} />
+        </Row>
+      </Page>
+    );
+  }
+
   const started = !!(s.raw || s.form.ship_name);
   return (
     <Page title={t('Home')} wide={wide} footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}>
+      <TypeHeader type={chosen} onChange={() => setChosen(null)} />
       {strip}
       {wide ? (
         <Row gap={18} style={{ alignItems: 'flex-start' }}>
           <Card style={{ flex: 1 }}>
-            <PasteBox s={s} wide />
+            <PasteBox s={s} wide hideType />
             <CheckBox s={s} />
           </Card>
           <Card style={{ flex: 1.2 }}>
@@ -173,7 +199,7 @@ export default function Home() {
         </Row>
       ) : (
         <>
-          <PasteBox s={s} />
+          <PasteBox s={s} hideType />
           {started ? (
             <>
               <CheckBox s={s} />

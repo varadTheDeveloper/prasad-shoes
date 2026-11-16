@@ -19,9 +19,11 @@ export interface LabelOrder {
   amount?: number | null;
   /** The pasted WhatsApp message ('' = typed by hand). A Prepaid price that came from it is not added again. */
   raw_message?: string | null;
-  // COD only
+  // Header line 3 (COD and Prepaid): "Weight : …    Date : …"
   booking_date?: string | null;
   weight?: string | null;
+  /** The day the order was saved (IST, YYYY-MM-DD) – the label date when no booking date is filled. */
+  created_date?: string | null;
 }
 
 export interface LabelShop {
@@ -147,18 +149,41 @@ export function fromLines(s: LabelShop): string[] {
 //                                                   COD 1999 (Size 8 pona sanke awaj)
 //   From :-  <shop>                                                         (left, as Prepaid)
 //
-// The fixed values come from shared/cod.ts. The Prepaid label above is not changed by any of this.
+// The fixed values come from shared/cod.ts. Since 16 Nov 2026 the Prepaid label also starts with the first 3 lines (headLines).
 // ------------------------------------------------------------------------------------------------
 const BLANK = '________';
 
-/** The centred header: 4 lines. Index 1 and 3 are printed bold. A missing weight / date prints a blank. */
+/** Today in India (YYYY-MM-DD) – the date shown on a label preview before the order is saved. */
+const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+
+/** The label date: the booking date, else the day the order was saved, else today (preview). */
+export function labelDate(o: LabelOrder): string {
+  return printDate(o.booking_date) || printDate(o.created_date) || printDate(todayIST());
+}
+
+/** The centred header: 4 lines. Index 1 and 3 are printed bold. A missing weight prints a blank. */
 export function codHeadLines(o: LabelOrder): string[] {
   return [
     `Booking Under ${COD_FIXED.bookingUnder}`,
     `Customer ID : ${COD_FIXED.customerId}, Contract ID – ${COD_FIXED.contractId}`,
-    `${COD_FIXED.hub}, Weight : ${o.weight?.trim() || BLANK}    Date : ${printDate(o.booking_date) || BLANK}`,
+    `${COD_FIXED.hub}, Weight : ${o.weight?.trim() || BLANK}    Date : ${labelDate(o)}`,
     codAmountLine(o),
   ];
+}
+
+/**
+ * The centred header of any label (client, 16 Nov 2026): COD = the 4 lines above; Prepaid = the first
+ * 3 (Booking Under / Customer ID + Contract ID / BNPL HUB, Weight, Date) – never "COD FOR RUPEES".
+ * Index 1 (and 3 on COD) is printed bold.
+ */
+export function headLines(o: LabelOrder): string[] {
+  const lines = codHeadLines(o);
+  return o.payment_type === 'COD' ? lines : lines.slice(0, 3);
+}
+
+/** The line under the address: "COD 1999 (…)" for COD, "PREPAID (…)" for Prepaid. */
+export function labelOrderLine(o: LabelOrder): string {
+  return o.payment_type === 'COD' ? codOrderLine(o) : orderLine(o);
 }
 
 /** "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY" (amount from the order). */

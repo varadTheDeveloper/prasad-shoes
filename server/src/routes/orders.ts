@@ -69,15 +69,8 @@ const fields = {
   weight: opt(20),
 };
 
-const COD_ONLY = ['booking_date', 'weight'] as const;
-
-/** Prepaid orders keep no COD details, so the two never mix. */
-function dropCodIfPrepaid<T extends Record<string, any>>(o: T): T {
-  if (o.payment_type !== 'PREPAID') return o;
-  const out: Record<string, any> = { ...o };
-  for (const k of COD_ONLY) out[k] = null;
-  return out as T;
-}
+// Booking date + weight are printed on both label types (header line 3) since 16 Nov 2026, so
+// Prepaid orders keep them too (they used to be cleared for Prepaid).
 
 const createBody = z.object({
   ...fields,
@@ -96,7 +89,7 @@ function parseCreate(body: any) {
   if (Object.keys(errs).length || !res.success) {
     throw new HttpError(400, 'VALIDATION', 'Please check the highlighted fields', { fields: errs });
   }
-  return dropCodIfPrepaid(res.data);
+  return res.data;
 }
 
 const ORDER_COLS = `o.id, o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2,
@@ -205,6 +198,8 @@ const listQuery = z.object({
   createdBy: z.coerce.number().int().optional(),
   q: z.string().trim().max(100).optional(),
   deleted: z.enum(['0', '1']).default('0'),
+  /** Prepaid and COD orders are listed separately (client, 16 Nov 2026); empty = both (API only). */
+  type: z.enum(['PREPAID', 'COD']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(500),
 });
@@ -226,6 +221,7 @@ function listWhere(f: z.infer<typeof listQuery>, u: AuthUser) {
   if (f.printed === 'yes') where.push('o.is_printed');
   if (f.printed === 'no') where.push('NOT o.is_printed');
   if (f.createdBy) add('o.created_by = ?', f.createdBy); // optional, not used by the app
+  if (f.type) add('o.payment_type = ?', f.type);
   if (f.q) {
     const digits = f.q.replace(/\D/g, '');
     if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
@@ -306,7 +302,7 @@ async function buildExport(query: unknown, u: AuthUser) {
     r.is_printed ? 'Yes' : 'No',
   ]);
   const file = await buildXlsx('Orders', EXPORT_COLS, data);
-  const name = `orders-${f.from ?? 'start'}-to-${f.to ?? 'today'}.xlsx`;
+  const name = `orders-${f.type ? `${f.type.toLowerCase()}-` : ''}${f.from ?? 'start'}-to-${f.to ?? 'today'}.xlsx`;
   const range = f.from || f.to ? `${dmy(f.from) || 'start'} to ${dmy(f.to) || 'today'}` : 'all dates';
   return { file, name, count: rows.length, range };
 }
@@ -401,13 +397,18 @@ r.get(
     const u = req.user;
     const { w, p } = listWhere(f, u);
     const total = await q(`SELECT count(*)::int AS n FROM orders o WHERE ${w}`, p);
+    // Counts for the PREPAID | COD switch: the same filters, both types.
+    const both = listWhere({ ...f, type: undefined }, u);
+    const byType = await q(`SELECT o.payment_type AS t, count(*)::int AS n FROM orders o WHERE ${both.w} GROUP BY o.payment_type`, both.p);
+    const counts = { PREPAID: 0, COD: 0 } as Record<'PREPAID' | 'COD', number>;
+    for (const x of byType.rows) counts[x.t as 'PREPAID' | 'COD'] = x.n;
     p.push(f.limit, (f.page - 1) * f.limit);
     const { rows } = await q(
       `SELECT ${ORDER_COLS} FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
         ORDER BY o.created_at DESC, o.id DESC LIMIT $${p.length - 1} OFFSET $${p.length}`,
       p,
     );
-    res.json({ orders: rows.map((o) => shape(u, o)), total: total.rows[0].n, page: f.page });
+    res.json({ orders: rows.map((o) => shape(u, o)), total: total.rows[0].n, page: f.page, counts });
   }),
 );
 
@@ -439,7 +440,6 @@ r.put(
     if (!can(u, 'ORDER_VIEW_AMOUNT')) delete patch.amount;
     let next = { ...before, ...Object.fromEntries(Object.entries(patch).filter(([k, v]) => v !== undefined && k in (req.body ?? {}))) };
     next.payment_type = effectivePayment(next.payment_type);
-    next = dropCodIfPrepaid(next);
     if (next.payment_type === 'COD' && !(Number(next.amount) > 0)) {
       throw new HttpError(400, 'VALIDATION', 'Enter COD amount', { fields: { amount: 'Enter COD amount' } });
     }

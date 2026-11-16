@@ -56,16 +56,18 @@ statsRouter.get(
   h(async (req, res) => {
     const u = req.user;
     const viewAll = true; // one combined order list for everyone
-    const scope = '';
+    // ?type=PREPAID|COD: the Home screen counts only the type chosen there (client, 16 Nov 2026).
+    const type = req.query.type === 'COD' || req.query.type === 'PREPAID' ? req.query.type : null;
+    const scope = type ? ` AND o.payment_type = '${type}'` : ''; // one of two fixed words, never user text
     const p: unknown[] = [];
-    const today = `o.deleted_at IS NULL AND o.created_at >= current_date`;
+    const today = `o.deleted_at IS NULL AND o.created_at >= current_date${scope}`;
 
     const [mine, notPrinted, todayAll, staff, recent] = await Promise.all([
       q(`SELECT count(*)::int AS n FROM orders o WHERE ${today} AND o.created_by = $1`, [u.id]),
       q(`SELECT count(*)::int AS n FROM orders o WHERE o.deleted_at IS NULL AND NOT o.is_printed ${scope}`, p),
       q(
         `SELECT count(*)::int AS n, COALESCE(sum(o.amount) FILTER (WHERE o.payment_type = 'COD'), 0)::float AS cod
-           FROM orders o WHERE ${today} ${scope}`,
+           FROM orders o WHERE ${today}`,
         p,
       ),
       viewAll
@@ -77,7 +79,7 @@ statsRouter.get(
         : Promise.resolve({ rows: [] as any[] }),
       q(
         `SELECT o.id, o.ship_name, o.pincode, o.payment_type, o.amount, o.is_printed, o.created_at
-           FROM orders o WHERE o.deleted_at IS NULL AND o.created_by = $1 ORDER BY o.created_at DESC LIMIT 5`,
+           FROM orders o WHERE o.deleted_at IS NULL AND o.created_by = $1${scope} ORDER BY o.created_at DESC LIMIT 5`,
         [u.id],
       ),
     ]);

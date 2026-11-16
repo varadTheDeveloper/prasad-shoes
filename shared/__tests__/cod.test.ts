@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { codRemainder, findBookingDate, findUnused, findWeight, parseCodMessage, parseWhatsApp, splitSize } from '../parser';
 import { COD_FIXED, amountInWords, isIsoDate, numberInWords, printDate } from '../cod';
-import { codAmountLine, codHeadLines, codOrderLine, orderLine, toLines, type LabelOrder } from '../label';
+import { codAmountLine, codHeadLines, codOrderLine, headLines, labelOrderLine, orderLine, toLines, type LabelOrder } from '../label';
 
 // ------------------------------------------------------------------ amount in words
 test('amount in words (Indian system, as printed on the COD label)', () => {
@@ -285,4 +285,18 @@ test('pasted note prints alone (nothing added from Size / Product / Amount); typ
   // nothing pasted for the note: the typed fields print
   assert.equal(orderLine({ ...cod, payment_type: 'PREPAID', size: '9', note: 'red', product_name: 'red capsi', amount: 1299, raw_message: '' }), 'PREPAID (red capsi, 9 no, 1299)');
   assert.equal(codOrderLine({ ...cod, size: '9', note: null, product_name: 'red capsi', amount: 1299, raw_message: 'Ramesh\nLatur' }), 'COD 1299 (red capsi, Size 9)');
+});
+
+test('Prepaid labels start with the first 3 COD header lines (never "COD FOR RUPEES"); date falls back to the order date', () => {
+  const pre: LabelOrder = { ...cod, payment_type: 'PREPAID', amount: 1299, booking_date: null, weight: null, created_date: '2026-11-15' };
+  assert.deepEqual(headLines(pre), [
+    'Booking Under Pune City West Division',
+    'Customer ID : 1634841966, Contract ID – 41282773',
+    'BNPL HUB Pune 411001, Weight : ________    Date : 15/11/2026',
+  ]);
+  assert.equal(headLines({ ...pre, weight: '800 g', booking_date: '2026-11-16' })[2], 'BNPL HUB Pune 411001, Weight : 800 g    Date : 16/11/2026');
+  assert.equal(headLines({ ...cod, payment_type: 'COD' }).length, 4);
+  assert.match(headLines({ ...cod, payment_type: 'COD' })[3], /^COD FOR RUPEES/);
+  assert.equal(labelOrderLine(pre), orderLine(pre));
+  assert.equal(labelOrderLine({ ...cod, payment_type: 'COD' }), codOrderLine({ ...cod, payment_type: 'COD' }));
 });

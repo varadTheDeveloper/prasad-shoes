@@ -12,11 +12,12 @@ import { useIsAdmin, usePermission } from '@/lib/auth';
 import { Banner, Button, Checkbox, Chip, Header, Input, Loading, Muted, useWide } from '@/components/ui';
 import { DateField } from '@/components/DateField';
 import { ExcelSheet } from '@/components/ExcelSheet';
+import { TypeSwitch } from '@/components/TypeChooser';
 import { payText, shiftISO, shortDateTime, todayISO } from '@/lib/format';
 import { setSelection } from '@/lib/selection';
 import { pagesFor } from '@shared/label';
-import { C, R } from '@/lib/theme';
-import type { Order } from '@shared/types';
+import { C, R, TYPE_COLOR } from '@/lib/theme';
+import type { Order, PaymentType } from '@shared/types';
 import { t } from '@/lib/i18n';
 
 type PrintFilter = 'no' | 'yes' | 'all';
@@ -31,15 +32,31 @@ function useDebounced<T>(v: T, ms: number) {
   return d;
 }
 
-/** Screen 6 · Orders: From – To dates, printed status, search; 50 at a time; Select all = every matching order. */
+/**
+ * Screen 6 · Orders: Prepaid and COD orders in SEPARATE lists (client, 16 Nov 2026) – a PREPAID | COD
+ * switch at the top; From – To dates, printed status, search, Select all, Print / Word / email and
+ * Excel all work inside the chosen type. 50 at a time; Select all = every matching order.
+ */
 export default function Orders() {
-  const params = useLocalSearchParams<{ preset?: string; at?: string }>();
+  const params = useLocalSearchParams<{ preset?: string; type?: string; at?: string }>();
   const admin = useIsAdmin();
   const canPrint = usePermission('LABEL_PRINT');
   const canReprint = usePermission('LABEL_REPRINT');
   const showAmount = usePermission('ORDER_VIEW_AMOUNT');
   const wide = useWide();
   const today = todayISO();
+
+  // Which list: PREPAID or COD (remembered on this device; Home can open a given one).
+  const [ordType, setOrdType] = useState<PaymentType>('PREPAID');
+  useEffect(() => {
+    getPref('orders_type').then((v) => (v === 'COD' || v === 'PREPAID') && !params.type && setOrdType(v));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pickType = (x: PaymentType) => {
+    setOrdType(x);
+    setPref('orders_type', x);
+  };
+  const tc = TYPE_COLOR[ordType];
 
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -75,6 +92,7 @@ export default function Orders() {
 
   // Home buttons open this screen with a preset: today, not printed, all ticked.
   useEffect(() => {
+    if (params.type === 'COD' || params.type === 'PREPAID') pickType(params.type);
     if (params.preset === 'unprinted') {
       setFrom(todayISO());
       setTo(todayISO());
@@ -86,6 +104,7 @@ export default function Orders() {
   }, [params.preset, params.at]); // "at" changes on every tap, so a second tap resets the filters again
 
   const filterQs = new URLSearchParams({
+    type: ordType,
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     printed: deleted ? 'all' : printed,
@@ -95,15 +114,17 @@ export default function Orders() {
 
   const list = useInfiniteQuery({
     queryKey: ['orders', 'list', filterQs],
-    queryFn: ({ pageParam }) => api<{ orders: Order[]; total: number }>('GET', `/orders?${filterQs}&limit=${PAGE}&page=${pageParam}`),
+    queryFn: ({ pageParam }) =>
+      api<{ orders: Order[]; total: number; counts?: Record<PaymentType, number> }>('GET', `/orders?${filterQs}&limit=${PAGE}&page=${pageParam}`),
     initialPageParam: 1,
     getNextPageParam: (last, all) => (all.length * PAGE < last.total ? all.length + 1 : undefined),
   });
   const orders = list.data?.pages.flatMap((p) => p.orders) ?? [];
   const total = list.data?.pages[0]?.total ?? 0;
+  const counts = list.data?.pages[0]?.counts;
   const selectable = (o: Order) => !o.deleted_at && (!o.is_printed || canReprint);
 
-  const olderQs = new URLSearchParams({ to: shiftISO(today, -1), printed: 'no', limit: '1' }).toString();
+  const olderQs = new URLSearchParams({ type: ordType, to: shiftISO(today, -1), printed: 'no', limit: '1' }).toString();
   const showOlder = from === today && to === today && printed !== 'yes' && !deleted && !search;
   const older = useQuery({
     queryKey: ['orders', 'older-unprinted', olderQs],
@@ -246,6 +267,7 @@ export default function Orders() {
 
   const filters = (
     <View style={[st.filters, { maxWidth: wide ? 1100 : 720 }]}>
+      <TypeSwitch value={ordType} onChange={pickType} counts={counts} />
       {deleted ? (
         <Pressable onPress={() => setDeleted(false)} style={st.deletedBar} hitSlop={6}>
           <Text style={{ color: C.danger, fontSize: 14, fontWeight: '700' }}>{t('Showing deleted orders · tap to go back')}</Text>
@@ -334,7 +356,7 @@ export default function Orders() {
       <View style={[st.rowWrap, { maxWidth: wide ? 1100 : 720 }]}>
         <Pressable
           onPress={() => router.push(`/order/${o.id}`)}
-          style={({ pressed }) => [st.row, index === 0 && st.first, index === orders.length - 1 && st.last, sel && { backgroundColor: C.tint }, pressed && { backgroundColor: C.pressed }]}
+          style={({ pressed }) => [st.row, index === 0 && st.first, index === orders.length - 1 && st.last, sel && { backgroundColor: tc.tint }, pressed && { backgroundColor: C.pressed }]}
         >
           {canPrint && !deleted ? (
             <View style={{ opacity: selectable(o) ? 1 : 0.35 }}>

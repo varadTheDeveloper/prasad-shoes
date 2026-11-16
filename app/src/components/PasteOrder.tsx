@@ -279,12 +279,12 @@ export function usePasteOrder() {
 export type PasteOrderState = ReturnType<typeof usePasteOrder>;
 
 /** Big paste button + the message box. */
-export function PasteBox({ s, wide }: { s: PasteOrderState; wide?: boolean }) {
+export function PasteBox({ s, wide, hideType }: { s: PasteOrderState; wide?: boolean; hideType?: boolean }) {
   const has = !!(s.raw || s.form.ship_name);
   const cod = s.type === 'COD';
   return (
     <View>
-      {FEATURES.cod ? (
+      {FEATURES.cod && !hideType ? (
         <Field label={t('Shipment type – pick before pasting')}>
           <TypeButtons value={s.type} onChange={s.setType} />
         </Field>

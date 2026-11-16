@@ -32,6 +32,15 @@ export const C = {
   placeholder: '#A8998B',
 };
 
+/**
+ * One colour per shipment type, used everywhere the type shows (Home buttons, Orders switch, badges).
+ * PREPAID = the logo brown; COD = a deep leather green that sits well next to it.
+ */
+export const TYPE_COLOR = {
+  PREPAID: { main: '#7A3214', pressed: '#5E260F', tint: '#F3E4D3', border: '#E2C9AE', on: '#FFFFFF', onSub: '#F3E4D3' },
+  COD: { main: '#2F5D4E', pressed: '#23473B', tint: '#E1EDE7', border: '#B9D3C6', on: '#FFFFFF', onSub: '#DCEBE3' },
+} as const;
+
 export const R = { card: 14, input: 10, button: 12, pill: 999 };
 
 /** Content stays readable on the website: phone-width column, wider for tables. */

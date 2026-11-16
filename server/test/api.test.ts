@@ -123,13 +123,14 @@ test('amount is optional: blank, null or missing all save, and stay blank', { sk
   assert.equal(ed.data.amount, null);
 });
 
-test('shipment type: missing = PREPAID; Prepaid keeps no COD details', { skip }, async () => {
+test('shipment type: missing = PREPAID; Prepaid keeps weight + booking date (printed on its label)', { skip }, async () => {
   const d = await call('POST', '/orders', order({ payment_type: undefined }), staff);
   assert.equal(d.status, 201, JSON.stringify(d.data));
   assert.equal(d.data.payment_type, 'PREPAID');
   const p = await call('POST', '/orders', order({ booking_date: '2026-11-02', weight: '800 g' }), staff);
   assert.equal(p.status, 201, JSON.stringify(p.data));
-  for (const k of ['booking_date', 'weight']) assert.equal(p.data[k], null, k);
+  assert.equal(p.data.booking_date, '2026-11-02');
+  assert.equal(p.data.weight, '800 g');
 });
 
 test('COD: needs an amount; saves booking date, weight, size + description', { skip }, async () => {
@@ -161,12 +162,12 @@ test('COD: needs an amount; saves booking date, weight, size + description', { s
   assert.equal(r.data.size, '8');
   assert.equal(r.data.note, 'pona sanke awaj');
 
-  // COD -> Prepaid clears the COD details; Prepaid -> COD keeps the amount
+  // COD -> Prepaid keeps weight + booking date (both labels print them since 16 Nov 2026); Prepaid -> COD keeps the amount
   const pre = await call('PUT', `/orders/${r.data.id}`, { payment_type: 'PREPAID' }, staff);
   assert.equal(pre.status, 200, JSON.stringify(pre.data));
   assert.equal(pre.data.payment_type, 'PREPAID');
-  assert.equal(pre.data.booking_date, null);
-  assert.equal(pre.data.weight, null);
+  assert.equal(pre.data.booking_date, '2026-11-02');
+  assert.equal(pre.data.weight, '800 g');
   const back = await call('PUT', `/orders/${r.data.id}`, { payment_type: 'COD', weight: '1 kg' }, staff);
   assert.equal(back.status, 200, JSON.stringify(back.data));
   assert.equal(back.data.payment_type, 'COD');
@@ -369,4 +370,30 @@ test('Print (owner only): one-time print page, same labels as Word, orders marke
   assert.equal((await fetch(`${API}/api/print/not-a-real-key`)).status, 404);
   // marked printed, like Download Word
   for (const id of ids) assert.equal((await call('GET', `/orders/${id}`, undefined, owner)).data.is_printed, true);
+});
+
+test('Prepaid and COD are listed separately: type filter on list, Select all, counts, Home stats, Excel name', { skip }, async () => {
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const c = await call('POST', '/orders', order({ ship_name: 'Type COD', payment_type: 'COD', amount: 999 }), owner);
+  const p = await call('POST', '/orders', order({ ship_name: 'Type Prepaid', weight: '700 g' }), owner);
+  assert.equal(p.data.weight, '700 g'); // Prepaid keeps a weight
+  const qs = `from=${day}&to=${day}`;
+  const cod = await call('GET', `/orders?${qs}&type=COD`, undefined, owner);
+  const pre = await call('GET', `/orders?${qs}&type=PREPAID`, undefined, owner);
+  assert.ok(cod.data.orders.every((o: any) => o.payment_type === 'COD'));
+  assert.ok(pre.data.orders.every((o: any) => o.payment_type === 'PREPAID'));
+  assert.ok(cod.data.orders.some((o: any) => o.id === c.data.id) && !cod.data.orders.some((o: any) => o.id === p.data.id));
+  assert.equal(cod.data.counts.COD, cod.data.total);
+  assert.equal(cod.data.counts.PREPAID, pre.data.total);
+  const ids = await call('GET', `/orders/ids?${qs}&type=PREPAID`, undefined, owner);
+  assert.ok(ids.data.ids.includes(p.data.id) && !ids.data.ids.includes(c.data.id));
+  const all = await call('GET', '/stats', undefined, owner);
+  const sc = await call('GET', '/stats?type=COD', undefined, owner);
+  const sp = await call('GET', '/stats?type=PREPAID', undefined, owner);
+  assert.equal(sc.data.ordersToday + sp.data.ordersToday, all.data.ordersToday);
+  assert.equal(sc.data.notPrinted + sp.data.notPrinted, all.data.notPrinted);
+  assert.ok(sc.data.myRecent.every((o: any) => o.payment_type === 'COD'));
+  const x = await call('GET', `/orders/export?${qs}&type=COD`, undefined, owner);
+  assert.equal(x.status, 200);
+  assert.equal(x.headers.get('x-file-name'), `orders-cod-${day}-to-${day}.xlsx`);
 });

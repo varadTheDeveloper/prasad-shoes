@@ -24,7 +24,7 @@ export interface FormState {
   note: string;
   payment_type: PaymentType;
   amount: string;
-  // COD only
+  // Label header line 3 (COD and Prepaid): "Weight : …    Date : …"
   booking_date: string; // 'YYYY-MM-DD'
   weight: string;
 }
@@ -50,10 +50,11 @@ export const emptyForm = (type: PaymentType = DEFAULT_PAYMENT): FormState => ({
   weight: '',
 });
 
-/** Prepaid <-> COD on an existing form: Prepaid keeps no COD details; COD gets today's booking date. */
+/** Prepaid <-> COD on an existing form: weight + booking date are kept (both labels print them);
+ *  COD gets today's booking date when none is set. */
 export function withType(f: FormState, type: PaymentType): FormState {
   const t = effectivePayment(type);
-  if (t === 'PREPAID') return { ...f, payment_type: t, booking_date: '', weight: '' };
+  if (t === 'PREPAID') return { ...f, payment_type: t };
   return { ...f, payment_type: t, booking_date: f.booking_date || todayISO() };
 }
 
@@ -77,10 +78,9 @@ export function formFromOrder(o: Order): FormState {
   };
 }
 
-/** COD details for saving / printing (null for Prepaid). */
+/** Weight + booking date for saving / printing (both label types; empty = null). */
 function codPart(f: FormState) {
   const n = (v: string) => (v.trim() ? v.trim() : null);
-  if (effectivePayment(f.payment_type) !== 'COD') return { booking_date: null, weight: null };
   return { booking_date: n(f.booking_date), weight: n(f.weight) };
 }
 
@@ -143,7 +143,7 @@ export function validate(f: FormState, showAmount: boolean): Record<string, stri
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
   if (showAmount && amt && !(Number(amt) >= 0)) e.amount = t('Enter a number, e.g. 1299');
   if (showAmount && FEATURES.cod && f.payment_type === 'COD' && !(Number(amt) > 0)) e.amount = t('Enter COD amount');
-  if (f.payment_type === 'COD' && f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = t('Pick a booking date');
+  if (f.booking_date && !isIsoDate(f.booking_date)) e.booking_date = t('Pick a booking date');
   return e;
 }
 
@@ -264,6 +264,17 @@ export function OrderForm({
           {input('note', { placeholder: t('e.g. RED') })}
         </Field>
       </Row>
+      {f.payment_type !== 'COD' ? (
+        // Prepaid labels print "Weight : …    Date : …" too (header line 3); both optional.
+        <Row>
+          <Field label={t('Weight (optional)')} error={errors.weight} style={half}>
+            {input('weight', { placeholder: t('e.g. 800 g') })}
+          </Field>
+          <Field label={t('Booking date (optional)')} error={errors.booking_date} style={half}>
+            <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder={t('Order date')} />
+          </Field>
+        </Row>
+      ) : null}
     </View>
   );
 }

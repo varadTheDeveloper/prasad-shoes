@@ -12,7 +12,9 @@ Owner (Varad) wants things explained in simple language, and the plan explained 
   `src/services/docx.ts`, India Post pincode check in `src/services/pincode.ts` + `data/pincodes.json`.
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
 - `app/` – Expo SDK 58 (Expo Router, TanStack Query): Android APK + website from the same code.
-  Home = paste screen; Orders = List (print) / Table (owner, Excel .xlsx export: `services/xlsx.ts`, all details, mobiles as text; the Excel box has a tick "Also send to email" → `POST /api/orders/export/email`, same safety as Send to Owner, audit `EXCEL_EMAIL`).
+  Home = first only two big buttons PREPAID / COD (stacked, colours `TYPE_COLOR` in theme.ts, `components/TypeChooser.tsx`), then the paste screen for that type
+  (type header + "Change"; counts and "Print today's labels" for that type, `/api/stats?type=`); Orders = PREPAID | COD switch (separate lists,
+  `type=` on `/api/orders`, `/orders/ids`, export; list returns `counts`), List (print) / Table (owner, Excel .xlsx export: `services/xlsx.ts`, all details, mobiles as text; the Excel box has a tick "Also send to email" → `POST /api/orders/export/email`, same safety as Send to Owner, audit `EXCEL_EMAIL`).
 - `deploy/` – AWS server scripts (written for Lightsail, used on EC2): `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
 
 ## Run on the PC (Windows)
@@ -70,15 +72,22 @@ Server-only changes do not need a new APK.
   (no table cell margins – WPS adds them to row heights).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
-- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** (only change since: the Prepaid amount prints last when filled – `PREPAID (red capsi, 9 no, 1299)` – not twice when the Note already has that price; client's wish 5 Nov 2026).
-  COD: amount required; booking date + weight in their own columns (migration 005), cleared when an order is Prepaid.
+- Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request
+  (changes so far: 5 Nov 2026 – the Prepaid amount prints last when filled, `PREPAID (red capsi, 9 no, 1299)`, not twice when the Note already has that price;
+  16 Nov 2026 – Prepaid also starts with the first 3 COD header lines (Booking Under / Customer ID + Contract ID / BNPL HUB, Weight, Date), never the
+  "COD FOR RUPEES" line – `headLines`, `labelOrderLine` in label.ts).
+  COD: amount required. Booking date + weight in their own columns (migration 005), kept for BOTH types (printed on both labels);
+  label date = booking date, else the day the order was saved (`created_date`, IST), else today (preview).
+- Print layout (docx.ts + printHtml.ts, identical): each label sits in the MIDDLE of its half of the paper (top label row 8 mm → centred at 74.25 mm,
+  blank row to the cut line; blank row under the cut line, bottom label centred at 222.75 mm); one font size per label (`labelSize`, 14→9 pt).
   Booking Under / Customer ID 1634841966 / Contract ID 41282773 / BNPL HUB Pune 411001 are constants in `shared/cod.ts` –
   never stored, never parsed, always printed. COD label = the shop's printed COD label: 4 centred header lines
   ("Booking Under …", bold "Customer ID : …, Contract ID – …", "BNPL HUB Pune 411001, Weight : …    Date : DD/MM/YYYY",
   bold "COD FOR RUPEES : 1999/-ONE THOUSAND NINE HUNDRED NINETY NINE ONLY") → TO block right (as Prepaid) →
   bold "COD 1999 (Size 8 pona sanke awaj)" – the words after the COD amount are the Note, printed exactly as written (client, 5 Nov 2026: "COD 1299 Size-7 no sanke" → "COD 1299 (Size-7 no sanke)"); Size box = the number only. Prepaid the same: the size line ("(SIZE- 9 CUTKAAN KaPSHI 1799)", "Size 9 4veni 999+sol") is the Note as written and prints as it is, without "9 no" again (`noteSaysSize`). Rule (5 Nov 2026): a Note that came from the pasted message prints ALONE – nothing added from Product / Size / Amount (`noteIsPasted`); only when the Note was not pasted do the typed fields print → From = shop, left.
-  No barcode (the post office sticks it on). COD font shrinks (14→9 pt, `codSize` in docx.ts) to fit the half page.
-- Orders list: From–To dates, Not printed / Printed (tap again = both), 50 per page; "Select all" uses `/api/orders/ids`.
+  No barcode (the post office sticks it on). Font shrinks (14→9 pt, `labelSize` in docx.ts) to fit the half page.
+- Orders list: PREPAID | COD switch first (never mixed; last choice remembered on the device), then From–To dates, Not printed / Printed
+  (tap again = both), 50 per page; "Select all" uses `/api/orders/ids` (with `type`).
 - **Send to Owner** (Orders footer, ADMIN only – button hidden for staff, `requireAdmin` on the server):
   `POST /api/labels/email {orderIds, client_request_id}` → same `buildLabelsDocx` file as Download Word, one email to
   `OWNER_EMAIL` (comma-separated list allowed; server/.env only; the app never sends a recipient) via the **Resend** HTTP API with built-in fetch, no

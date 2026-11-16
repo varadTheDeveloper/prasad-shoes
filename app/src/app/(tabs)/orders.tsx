@@ -500,7 +500,8 @@ export default function Orders() {
         onKeep={() => setAskClear(false)}
       />
       <Header
-        title={chosen === 'COD' ? t('COD orders') : t('PREPAID orders')}
+        // Phone + owner: List / Table share the top bar, so the short word fits ("COD orders" was cut to "COD or…").
+        title={admin && !wide ? chosen : chosen === 'COD' ? t('COD orders') : t('PREPAID orders')}
         titleColor={tc.main}
         onBack={goBack}
         right={

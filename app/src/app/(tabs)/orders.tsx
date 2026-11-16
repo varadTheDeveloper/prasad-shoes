@@ -494,7 +494,7 @@ export default function Orders() {
         visible={askClear}
         title={t('Clear the selection?')}
         text={t('{n} ticked orders will be unticked.', { n: selected.size })}
-        discardLabel={t('Clear')}
+        discardLabel={t('Untick all')}
         keepLabel={t('Keep')}
         onDiscard={leaveNow}
         onKeep={() => setAskClear(false)}

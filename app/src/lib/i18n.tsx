@@ -279,7 +279,7 @@ const MR: Record<string, string> = {
   'All printed': 'सर्व प्रिंट झाले',
   'Clear the selection?': 'निवड काढायची?',
   '{n} ticked orders will be unticked.': 'टिक केलेल्या {n} ऑर्डर्सची टिक निघेल.',
-  Clear: 'काढा',
+  'Untick all': 'सर्व टिक काढा',
   Keep: 'ठेवा',
   'Discard this order?': 'ही ऑर्डर रद्द करायची?',
   'The pasted message and the details you typed are not saved yet.': 'पेस्ट केलेला मेसेज आणि भरलेली माहिती अजून सेव्ह झालेली नाही.',

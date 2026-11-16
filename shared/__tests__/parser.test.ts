@@ -442,3 +442,31 @@ test('size line in brackets "(SIZE- 9 CUTKAAN KaPSHI 1799)": Note as written, no
   // typed by hand (no size words in the note): "9 no" and the amount print as before
   assert.equal(orderLine({ ...r, note: 'red', amount: 1299, raw_message: '', payment_type: 'PREPAID' }), 'PREPAID (9 no, red, 1299)');
 });
+
+// ------------------------------------------------------------------ address written first, name later (client, 17 Nov 2026)
+const ADDRESS_FIRST = `Haryana  Ambala city Jalbera road Sop nambar 27 Dashmesh Dairy
+Raheem Shah
+PINCODE.134003
+Mobile number 
+74047 14701
+Size 7 COD 2250`;
+
+test('address on the first line, name on the next: they are not swapped any more (both marked to check)', () => {
+  const r = check(ADDRESS_FIRST, {
+    ship_name: 'Raheem Shah',
+    address: 'Haryana Ambala city Jalbera road Sop nambar 27 Dashmesh Dairy',
+    pincode: '134003',
+    mobile1: '7404714701',
+    size: '7',
+    saysCod: 2250, // the Prepaid screen asks "is this a COD order?"
+  }) as any;
+  assert.ok(r.guessed.includes('ship_name') && r.guessed.includes('address'));
+});
+
+test('name first stays the name; labelled messages are untouched; no COD = saysCod null', () => {
+  check('Rahul Patil\nFlat 2, Shivaji Nagar\nPune 411005\n9876543210', { ship_name: 'Rahul Patil', address: 'Flat 2, Shivaji Nagar, Pune', saysCod: null });
+  check('Address: Plot 5, Station Road, Latur\nName: Sunil More\nPin 413512\nMob 9822012345', { ship_name: 'Sunil More', address: 'Plot 5, Station Road, Latur' });
+  // first line is not clearly an address: unchanged (first line = name)
+  check('Kiran Jadhav\nSunil Jadhav\nGanesh Peth Kolhapur 416001\n9822000001', { ship_name: 'Kiran Jadhav' });
+  check('Raju\nNear bus stand, Karad\n415110\n9822000002\ncod 1499', { ship_name: 'Raju', saysCod: 1499 });
+});

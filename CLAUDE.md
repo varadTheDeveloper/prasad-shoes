@@ -70,6 +70,11 @@ Server-only changes do not need a new APK.
 - Label "TO" order: name, address, landmark, district, state, mobile, pincode, then COD/PREPAID line;
   nothing printed twice (`shared/label.ts`). Word file: 2 labels per A4 page, must stay 2 per page in **WPS Office**
   (no table cell margins – WPS adds them to row heights).
+- Paste reader (17 Nov 2026): no labels + first line clearly an address (number / road, city, nagar, nambar… / state / >5 words)
+  + a later line clearly a name (2–4 letter-only words) → that line is the name (both marked to check; `looksLikeAddress/Name`).
+  `saysCod` = "COD 2250" in the message: on the PREPAID screen a red box above Save asks "is this a COD order?"
+  (Switch to COD = same message read as COD / Keep PREPAID); Save waits for the answer, never switches by itself.
+  COD reader: a size written before "COD" ("Size 7 COD 2250") is part of the note → "COD 2250 (Size 7)".
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

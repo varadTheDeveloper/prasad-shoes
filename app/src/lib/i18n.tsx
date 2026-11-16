@@ -273,6 +273,12 @@ const MR: Record<string, string> = {
   'Paid orders – paste the customer’s WhatsApp address': 'पैसे भरलेल्या ऑर्डर – ग्राहकाचा WhatsApp पत्ता पेस्ट करा',
   'PREPAID orders': 'PREPAID ऑर्डर',
   'COD orders': 'COD ऑर्डर',
+  // ---- Prepaid paste that says COD (17 Nov 2026)
+  'This message says COD {n} – is this a COD order?': 'या मेसेजमध्ये COD {n} लिहिले आहे – ही COD ऑर्डर आहे का?',
+  'Pick one to save. On PREPAID the label would print PREPAID, and the customer would not be asked for money.':
+    'सेव्ह करण्यासाठी एक निवडा. PREPAID वर लेबलवर PREPAID छापले जाईल आणि ग्राहकाकडून पैसे घेतले जाणार नाहीत.',
+  'Switch to COD': 'COD वर बदला',
+  'Keep PREPAID': 'PREPAID ठेवा',
   // ---- Orders: PREPAID / COD buttons first (17 Nov 2026)
   'Pick which orders to see': 'कोणत्या ऑर्डर्स पाहायच्या ते निवडा',
   '{n} not printed': '{n} प्रिंट बाकी',

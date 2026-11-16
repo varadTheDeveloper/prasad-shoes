@@ -45,6 +45,13 @@ export default function Home() {
     if (web) window.history.pushState({ ...(window.history.state ?? {}), [histKey]: x }, '');
   }
 
+  /** "Switch to COD" from the paste screen's warning: same message, read again as COD; the title follows. */
+  function switchType(x: PaymentType) {
+    s.setType(x);
+    setChosen(x);
+    if (web && window.history.state?.[histKey]) window.history.replaceState({ ...window.history.state, [histKey]: x }, '');
+  }
+
   // Back (header button, Android back, browser ←): to the two buttons; an unsaved paste asks first.
   const dirty = !!(s.raw.trim() || s.form.ship_name.trim() || s.form.address.trim() || s.form.pincode.trim() || s.form.mobile1.trim());
   const dirtyRef = useRef(dirty);
@@ -241,7 +248,7 @@ export default function Home() {
       titleColor={TYPE_COLOR[chosen].main}
       onBack={goBack}
       wide={wide}
-      footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}
+      footer={started || s.saved || wide ? <SaveBar s={s} onSwitchType={switchType} /> : undefined}
     >
       <DiscardSheet visible={askDiscard} onDiscard={leaveNow} onKeep={() => setAskDiscard(false)} />
       {strip}

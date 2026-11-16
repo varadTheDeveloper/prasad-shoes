@@ -34,6 +34,8 @@ interface Parsed {
   filled: string[];
   missing: string[];
   guessed: string[];
+  /** "COD 2250" in the message (17 Nov 2026): on the Prepaid screen the person is asked "is this a COD order?" */
+  saysCod?: number | null;
 }
 
 export function usePasteOrder() {
@@ -59,6 +61,8 @@ export function usePasteOrder() {
   const [ackKey, setAckKey] = useState<string | null>(null);
   const [askAck, setAskAck] = useState(false);
   const [keptMismatch, setKeptMismatch] = useState<Set<string>>(new Set());
+  // "Keep PREPAID" was tapped for this message's "COD 2250".
+  const [codKept, setCodKept] = useState(false);
   // Fields filled from the pincode (not typed / pasted): replaced again if the pincode changes.
   const [autoFilled, setAutoFilled] = useState<Set<FormKey>>(new Set());
   // One id per filled form: a double tap or network retry can never save twice.
@@ -107,6 +111,7 @@ export function usePasteOrder() {
     const cod = t === 'COD';
     const p = cod ? parseCodMessage(text) : parseWhatsApp(text);
     setParsed(text.trim() ? p : null);
+    setCodKept(false);
     setForm((f) => {
       const next = { ...f };
       PARSED_KEYS.forEach((k) => {
@@ -267,9 +272,12 @@ export function usePasteOrder() {
     ...(mismatch?.state ? ['state'] : []),
   ];
 
+  // A Prepaid paste whose message says "COD 2250": asked before saving, never switched by itself.
+  const codAsk = type === 'PREPAID' && !codKept && parsed?.saysCod ? parsed.saysCod : null;
+
   return {
     raw, form, parsed, errors, saving, dup, saved, topError, clipNote, unused, pin, showAmount: amountOn, askAck: askAck && notes.length > 0,
-    type, setType,
+    type, setType, codAsk, keepPrepaid: () => setCodKept(true),
     noteCount: notes.length, highlight, autoFilled, needsAck, mismatch, applyPincodeValues, keepTyped,
     applyPaste, change, clear, pasteFromClipboard, addToAddress, ignore, save, setDup,
     label: { ...formToLabel(form), raw_message: raw },
@@ -361,9 +369,19 @@ export function PasteForm({ s, twoCol }: { s: PasteOrderState; twoCol?: boolean 
 }
 
 /** Save button (and the "Saved" banner) for the screen footer. */
-export function SaveBar({ s }: { s: PasteOrderState }) {
+export function SaveBar({ s, onSwitchType }: { s: PasteOrderState; onSwitchType?: (x: PaymentType) => void }) {
   return (
     <View>
+      {s.codAsk ? (
+        <View style={st.codAsk}>
+          <Text style={st.codAskTitle}>{t('This message says COD {n} – is this a COD order?', { n: s.codAsk })}</Text>
+          <Text style={st.codAskText}>{t('Pick one to save. On PREPAID the label would print PREPAID, and the customer would not be asked for money.')}</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <Button title={t('Switch to COD')} onPress={() => (onSwitchType ?? s.setType)('COD')} style={{ flex: 1 }} />
+            <Button kind="secondary" title={t('Keep PREPAID')} onPress={s.keepPrepaid} style={{ flex: 1 }} />
+          </View>
+        </View>
+      ) : null}
       {s.saved ? (
         <Pressable onPress={() => router.push(`/order/${s.saved!.id}`)}>
           <Banner kind="ok" title={t('Saved #{id} · {name}', { id: s.saved.id, name: s.saved.ship_name })} text={t('Ready for the next order. Tap to view this one.')} />
@@ -385,7 +403,7 @@ export function SaveBar({ s }: { s: PasteOrderState }) {
         title={s.askAck ? t('Checked – Save order') : t('Save order')}
         onPress={() => s.save(false)}
         loading={s.saving && !s.dup}
-        disabled={s.saving}
+        disabled={s.saving || !!s.codAsk}
       />
     </View>
   );
@@ -410,6 +428,9 @@ export function PasteDuplicate({ s }: { s: PasteOrderState }) {
 }
 
 const st = StyleSheet.create({
+  codAsk: { backgroundColor: C.dangerTint, borderWidth: 1, borderColor: C.danger, borderRadius: R.card, padding: 12, marginBottom: 10 },
+  codAskTitle: { fontSize: 16, fontWeight: '700', color: C.danger },
+  codAskText: { fontSize: 14, color: C.text, marginTop: 4 },
   pasteBig: { backgroundColor: C.action, borderRadius: R.card, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', marginBottom: 12 },
   pasteBigText: { color: C.onAction, fontSize: 20, fontWeight: '800' },
   pasteBigSub: { color: C.onActionSub, fontSize: 13, marginTop: 4 },

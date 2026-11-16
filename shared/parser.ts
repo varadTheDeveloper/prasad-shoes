@@ -39,6 +39,8 @@ export interface ParseResult {
   /** From a product line like "11 no black shahu 2999+ naal": product "black shahu", note "naal". */
   product_name: string;
   note: string;
+  /** "COD 2250" written in the message (amount), else null. The Prepaid screen asks "is this a COD order?". */
+  saysCod: number | null;
   /** Fields that were filled (for the "8 fields auto-filled" chip). */
   filled: ParsedField[];
   /** Fields that should be checked by a person: empty required fields and guessed values. */
@@ -257,6 +259,30 @@ const STATE_NAMES = new Map(
 function stateLine(v: string): string {
   if (/\d/.test(v)) return '';
   return STATE_NAMES.get(v.toLowerCase().replace(/[^\p{L}\p{M}]+/gu, '')) ?? '';
+}
+
+// ---------------------------------------------------------------------------------------------
+// Name or address? (client, 17 Nov 2026: "Haryana Ambala city Jalbera road Sop nambar 27 Dashmesh Dairy"
+// on the first line, the name "Raheem Shah" on the second). Without "Name:" / "Address:" labels the
+// first line was taken as the name. Now: when the first line clearly looks like an address and a later
+// line clearly looks like a person's name, they swap (both stay marked for checking).
+// ---------------------------------------------------------------------------------------------
+const ADDRESS_WORD =
+  /\b(?:road|rd|marg|street|st|lane|galli|gali|chowk|chauk|nagar|city|near|nr|opp|opposite|behind|colony|society|soc|sector|ward|block|area|village|vill|vil|gaon|post|po|taluka|tal|tehsil|dist|distt|district|house|flat|plot|room|building|bldg|apartment|apt|floor|wadi|peth|bazar|bazaar|market|mandir|temple|masjid|church|school|college|hospital|dairy|shop|nambar|number|no|camp|station|mohalla|basti|khurd|budruk|bk|kh|phase|tower|chawl|naka|phata|stand|depot|highway|hwy|nh)\b/i;
+/** A line that is clearly an address: a house / road number, an address word, a state name, or many words. */
+function looksLikeAddress(l: string): boolean {
+  if (/\d/.test(l) || ADDRESS_WORD.test(l)) return true;
+  const words = l.split(/[\s,]+/).map((w) => w.toLowerCase().replace(/[^\p{L}\p{M}]+/gu, '')).filter(Boolean);
+  if (words.length > 5) return true;
+  return words.some((w, i) => STATE_NAMES.has(w.toLowerCase()) || (words[i + 1] && STATE_NAMES.has((w + words[i + 1]).toLowerCase())));
+}
+/** A line that is clearly a person's name: 2–4 words of letters only, no address word, no state. */
+function looksLikeName(l: string): boolean {
+  const v = l.trim();
+  if (!/^[\p{L}\p{M}.' ]+$/u.test(v) || v.length > 40) return false;
+  const words = v.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 4) return false;
+  return !ADDRESS_WORD.test(v) && !stateLine(v) && !words.some((w) => STATE_NAMES.has(w.toLowerCase()));
 }
 
 /** The message split into lines, without WhatsApp time / sender prefixes and bullets. */
@@ -513,6 +539,14 @@ export function parseWhatsApp(text: string): ParseResult {
     }
     if (!onlyNumbers) looseKept.push(l);
   });
+  if (!f.ship_name && looseKept.length >= 2 && looksLikeAddress(looseKept[0]) && !looksLikeName(looseKept[0])) {
+    // Address written first, name on a later line (no labels): take the name-like line as the name.
+    const i = looseKept.findIndex((l, k) => k > 0 && looksLikeName(l));
+    if (i > 0) {
+      f.ship_name = looseKept.splice(i, 1)[0];
+      guessed.push('ship_name', 'address');
+    }
+  }
   if (!f.ship_name && looseKept.length) {
     f.ship_name = looseKept.shift()!;
   }
@@ -567,7 +601,11 @@ export function parseWhatsApp(text: string): ParseResult {
   const required: ParsedField[] = ['ship_name', 'address', 'pincode', 'mobile1'];
   const missing = required.filter((k) => !f[k as Key]);
 
-  return { ...f, amount, product_name, note, filled, missing, guessed };
+  // "COD 2250" / "cod-1499" / "COD Rs 999" anywhere in the message.
+  const codM = toAsciiDigits(text).match(/\bcod\b\s*[:\-–=]?\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})(?![\d])/i);
+  const saysCod = codM ? Number(codM[1]) : null;
+
+  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -791,6 +829,10 @@ function codLine(raw: string): CodLine {
     // "(Rupees One Thousand Two Hundred Only)" / "-ONE THOUSAND … ONLY": the words are printed from the number.
     if (after && !(NUMBER_WORDS.test(after.replace(/^(?:rs\.?|rupees?|₹)\s*/i, '')) && /[a-z]{3}/i.test(after)) && /[\p{L}\p{N}]/u.test(after))
       out.note = after;
+    // "Size 7 COD 2250": a size written BEFORE "COD" belongs to the note too (17 Nov 2026) -> "COD 2250 (Size 7)".
+    const before = ascii.slice(0, a.index).replace(/^[\s,|;:\-–—(]+|[\s,|;:\-–—(]+$/g, '').replace(/\s{2,}/g, ' ');
+    if (before && /^(?:(?:size|sizes|साइज|साईज|माप)\b|\d{1,2}(?:\.5)?\s*(?:no|number|नंबर|नं)\b)/i.test(before))
+      out.note = out.note ? `${before} ${out.note}` : before;
     // The amount line holds nothing for the address.
     rest = '';
   }

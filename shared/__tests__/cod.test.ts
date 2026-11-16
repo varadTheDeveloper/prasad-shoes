@@ -300,3 +300,21 @@ test('Prepaid labels start with the first 3 COD header lines (never "COD FOR RUP
   assert.equal(labelOrderLine(pre), orderLine(pre));
   assert.equal(labelOrderLine({ ...cod, payment_type: 'COD' }), codOrderLine({ ...cod, payment_type: 'COD' }));
 });
+
+test('COD screen, address first + "Size 7 COD 2250": name / address right, size 7, label "COD 2250 (Size 7)" (17 Nov 2026)', () => {
+  const r = parseCodMessage(`Haryana  Ambala city Jalbera road Sop nambar 27 Dashmesh Dairy
+Raheem Shah
+PINCODE.134003
+Mobile number 
+74047 14701
+Size 7 COD 2250`);
+  assert.equal(r.ship_name, 'Raheem Shah');
+  assert.equal(r.address, 'Haryana Ambala city Jalbera road Sop nambar 27 Dashmesh Dairy');
+  assert.equal(r.amount, 2250);
+  assert.equal(r.size, '7');
+  assert.equal(r.note, 'Size 7');
+  // words after the amount still come first in their place: "Size 8 COD 1999 pona sanke" -> "Size 8 pona sanke"
+  assert.equal(parseCodMessage('Ramesh Patil\nKothrud Pune 411038\n9822000003\nSize 8 COD 1999 pona sanke').note, 'Size 8 pona sanke');
+  // a COD line without a size before it is unchanged
+  assert.equal(parseCodMessage('Ramesh Patil\nKothrud Pune 411038\n9822000003\nCOD 1299 Size-7 no sanke').note, 'Size-7 no sanke');
+});

@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackHandler, Platform, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -7,9 +7,9 @@ import { useAuth, useIsAdmin, usePermission } from '@/lib/auth';
 import { setSelection } from '@/lib/selection';
 import { Button, Card, LangSwitch, ListRow, Muted, Page, Pill, Row, SectionTitle, useWide } from '@/components/ui';
 import { CheckBox, PasteBox, PasteDuplicate, PasteForm, SaveBar, usePasteOrder } from '@/components/PasteOrder';
-import { TypeChooser, TypeHeader } from '@/components/TypeChooser';
+import { DiscardSheet, TypeChooser } from '@/components/TypeChooser';
 import { dayTime, payText, shiftISO, time, todayISO } from '@/lib/format';
-import { C } from '@/lib/theme';
+import { C, TYPE_COLOR } from '@/lib/theme';
 import type { Order, PaymentType } from '@shared/types';
 import { t } from '@/lib/i18n';
 
@@ -36,10 +36,62 @@ export default function Home() {
   const s = usePasteOrder();
   // The type picked on the two-button screen (null = show the two buttons).
   const [chosen, setChosen] = useState<PaymentType | null>(null);
+  const web = Platform.OS === 'web';
+  const histKey = 'psHomeType'; // our mark on the browser history entry of the paste screen
   function pick(x: PaymentType) {
     s.setType(x);
     setChosen(x);
+    // Website: one history entry, so the browser's ← button comes back to the two buttons.
+    if (web) window.history.pushState({ ...(window.history.state ?? {}), [histKey]: x }, '');
   }
+
+  // Back (header button, Android back, browser ←): to the two buttons; an unsaved paste asks first.
+  const dirty = !!(s.raw.trim() || s.form.ship_name.trim() || s.form.address.trim() || s.form.pincode.trim() || s.form.mobile1.trim());
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const [askDiscard, setAskDiscard] = useState(false);
+  const leavingRef = useRef(false);
+  function leave() {
+    setAskDiscard(false);
+    s.clear();
+    setChosen(null);
+  }
+  /** Leave the paste screen; on the website through the history entry, so ← / → stay in step. */
+  function leaveNow() {
+    if (web && window.history.state?.[histKey]) {
+      leavingRef.current = true;
+      window.history.back(); // the popstate below calls leave()
+    } else leave();
+  }
+  function goBack() {
+    if (dirtyRef.current) setAskDiscard(true);
+    else leaveNow();
+  }
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    if (!chosen) return;
+    if (web) {
+      const onPop = () => {
+        if (leavingRef.current || !dirtyRef.current) {
+          leavingRef.current = false;
+          leave();
+        } else {
+          // Browser ← with an unsaved paste: stay on this screen and ask.
+          window.history.pushState({ ...(window.history.state ?? {}), [histKey]: chosen }, '');
+          setAskDiscard(true);
+        }
+      };
+      window.addEventListener('popstate', onPop);
+      return () => window.removeEventListener('popstate', onPop);
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBackRef.current();
+      return true; // handled: stay in the app
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen]);
   const typeQs = chosen ? { type: chosen } : ({} as Record<string, string>);
 
   const stats = useQuery({ queryKey: ['stats', chosen], queryFn: () => api<Stats>('GET', `/stats${chosen ? `?type=${chosen}` : ''}`) });
@@ -184,8 +236,14 @@ export default function Home() {
 
   const started = !!(s.raw || s.form.ship_name);
   return (
-    <Page title={t('Home')} wide={wide} footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}>
-      <TypeHeader type={chosen} onChange={() => setChosen(null)} />
+    <Page
+      title={chosen === 'COD' ? t('COD orders') : t('PREPAID orders')}
+      titleColor={TYPE_COLOR[chosen].main}
+      onBack={goBack}
+      wide={wide}
+      footer={started || s.saved || wide ? <SaveBar s={s} /> : undefined}
+    >
+      <DiscardSheet visible={askDiscard} onDiscard={leaveNow} onKeep={() => setAskDiscard(false)} />
       {strip}
       {wide ? (
         <Row gap={18} style={{ alignItems: 'flex-start' }}>

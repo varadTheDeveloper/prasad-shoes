@@ -21,16 +21,29 @@ import { useAuth } from '@/lib/auth';
 import { useLang, type Lang } from '@/lib/i18n';
 
 // ----------------------------------------------------------------- page frame
-export function Header({ title, right }: { title: string; right?: ReactNode }) {
+export function Header({ title, right, onBack, titleColor }: { title: string; right?: ReactNode; onBack?: () => void; titleColor?: string }) {
   const { me } = useAuth();
-  useLang();
+  const { t } = useLang();
   const insets = useSafeAreaInsets();
   return (
     <View style={[s.header, { paddingTop: insets.top + 14 }]}>
       <View style={s.headerInner}>
-        <Text style={s.headerTitle} numberOfLines={1}>
-          {title}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 }}>
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('Back')}
+              style={({ pressed }) => [s.back, pressed && { backgroundColor: C.pressed }]}
+            >
+              <Text style={s.backText}>‹ {t('Back')}</Text>
+            </Pressable>
+          ) : null}
+          <Text style={[s.headerTitle, titleColor ? { color: titleColor } : null]} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
         {right ?? (me ? <RoleBadge role={me.role} /> : null)}
       </View>
     </View>
@@ -71,6 +84,8 @@ export function Page({
   wide,
   scroll = true,
   right,
+  onBack,
+  titleColor,
 }: {
   title: string;
   children: ReactNode;
@@ -78,11 +93,14 @@ export function Page({
   wide?: boolean;
   scroll?: boolean;
   right?: ReactNode;
+  /** Shows "‹ Back" left of the title. */
+  onBack?: () => void;
+  titleColor?: string;
 }) {
   const inner = <View style={[s.pageInner, { maxWidth: wide ? 1100 : MAX_W }]}>{children}</View>;
   return (
     <View style={s.page}>
-      <Header title={title} right={right} />
+      <Header title={title} right={right} onBack={onBack} titleColor={titleColor} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
@@ -324,6 +342,8 @@ export const s = StyleSheet.create({
   header: { backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: 14, paddingHorizontal: 20 },
   headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1100, alignSelf: 'center' },
   headerTitle: { fontSize: 22, fontWeight: '700', color: C.text, flexShrink: 1 },
+  back: { borderWidth: 1, borderColor: C.inputBorder, borderRadius: R.pill, paddingVertical: 6, paddingHorizontal: 12 },
+  backText: { fontSize: 15, fontWeight: '700', color: C.action },
   roleBadge: { borderWidth: 1.5, borderColor: C.text, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 3 },
   roleBadgeText: { fontSize: 12, fontWeight: '700', color: C.text, letterSpacing: 0.5 },
   scroll: { padding: 18, paddingBottom: 32 },

@@ -1,9 +1,9 @@
 // PREPAID / COD everywhere in one look (client, 16 Nov 2026):
 //   - TypeChooser: Home opens with only these two big buttons, one above the other.
-//   - TypeHeader: the chosen type in its colour + "Change" (back to the two buttons).
+//   - DiscardSheet: "Discard this order?" when Back would lose an unsaved paste.
 //   - TypeSwitch: PREPAID | COD switch with counts (Orders).
 // Colours: TYPE_COLOR in lib/theme.ts.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PaymentType } from '@shared/types';
 import { C, R, TYPE_COLOR } from '@/lib/theme';
 import { t } from '@/lib/i18n';
@@ -35,17 +35,22 @@ export function TypeChooser({ onPick }: { onPick: (x: PaymentType) => void }) {
   );
 }
 
-/** "PREPAID orders" / "COD orders" bar in the type's colour, with a Change button. */
-export function TypeHeader({ type, onChange }: { type: PaymentType; onChange: () => void }) {
-  const c = TYPE_COLOR[type];
+/** Back from the paste screen with an unsaved order: Discard / Keep editing. */
+export function DiscardSheet({ visible, onDiscard, onKeep }: { visible: boolean; onDiscard: () => void; onKeep: () => void }) {
   return (
-    <View style={[st.header, { backgroundColor: c.tint, borderColor: c.border }]}>
-      <View style={[st.dot, { backgroundColor: c.main }]} />
-      <Text style={[st.headerText, { color: c.main }]}>{type === 'COD' ? t('COD orders') : t('PREPAID orders')}</Text>
-      <Pressable onPress={onChange} hitSlop={8} style={({ pressed }) => [st.change, { borderColor: c.main }, pressed && { backgroundColor: c.border }]}>
-        <Text style={[st.changeText, { color: c.main }]}>{t('Change')}</Text>
-      </Pressable>
-    </View>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeep}>
+      <Pressable style={st.backdrop} onPress={onKeep} />
+      <View style={st.sheet}>
+        <Text style={st.sheetTitle}>{t('Discard this order?')}</Text>
+        <Text style={st.sheetText}>{t('The pasted message and the details you typed are not saved yet.')}</Text>
+        <Pressable onPress={onDiscard} style={({ pressed }) => [st.sheetBtn, { backgroundColor: pressed ? '#B91C1C' : C.danger }]}>
+          <Text style={[st.sheetBtnText, { color: '#fff' }]}>{t('Discard')}</Text>
+        </Pressable>
+        <Pressable onPress={onKeep} style={({ pressed }) => [st.sheetBtn, st.sheetBtnLine, pressed && { backgroundColor: C.pressed }]}>
+          <Text style={[st.sheetBtnText, { color: C.action }]}>{t('Keep editing')}</Text>
+        </Pressable>
+      </View>
+    </Modal>
   );
 }
 
@@ -90,11 +95,13 @@ const st = StyleSheet.create({
   big: { borderRadius: R.card, paddingVertical: 30, paddingHorizontal: 20, alignItems: 'center', minHeight: 120, justifyContent: 'center' },
   bigTitle: { fontSize: 28, fontWeight: '800', letterSpacing: 1 },
   bigSub: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: R.button, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14, gap: 10 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  headerText: { flex: 1, fontSize: 17, fontWeight: '800', letterSpacing: 0.5 },
-  change: { borderWidth: 1, borderRadius: R.pill, paddingVertical: 6, paddingHorizontal: 14 },
-  changeText: { fontSize: 14, fontWeight: '700' },
+  backdrop: { flex: 1, backgroundColor: C.backdrop },
+  sheet: { position: 'absolute', left: 16, right: 16, top: '30%', maxWidth: 420, alignSelf: 'center', marginHorizontal: 'auto', backgroundColor: C.card, borderRadius: R.card, padding: 20 },
+  sheetTitle: { fontSize: 20, fontWeight: '700', color: C.text, marginBottom: 6 },
+  sheetText: { fontSize: 15, color: C.muted, marginBottom: 18 },
+  sheetBtn: { borderRadius: R.button, paddingVertical: 13, alignItems: 'center', marginTop: 8 },
+  sheetBtnLine: { borderWidth: 1, borderColor: C.inputBorder },
+  sheetBtnText: { fontSize: 16, fontWeight: '700' },
   switch: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   switchItem: { flex: 1, borderWidth: 1.5, borderRadius: R.button, paddingVertical: 12, alignItems: 'center' },
   switchText: { fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },

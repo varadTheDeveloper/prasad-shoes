@@ -13,7 +13,7 @@ Owner (Varad) wants things explained in simple language, and the plan explained 
   Database changes = new numbered file in `server/migrations/` (never edit an old one).
 - `app/` – Expo SDK 58 (Expo Router, TanStack Query): Android APK + website from the same code.
   Home = first only two big buttons PREPAID / COD (stacked, colours `TYPE_COLOR` in theme.ts, `components/TypeChooser.tsx`), then the paste screen for that type
-  (type header + "Change"; counts and "Print today's labels" for that type, `/api/stats?type=`); Orders = PREPAID | COD switch (separate lists,
+  ("‹ Back" in the header → the two buttons, also Android back / browser ←, "Discard this order?" if unsaved; counts and "Print today's labels" for that type, `/api/stats?type=`); Orders = PREPAID | COD switch (separate lists,
   `type=` on `/api/orders`, `/orders/ids`, export; list returns `counts`), List (print) / Table (owner, Excel .xlsx export: `services/xlsx.ts`, all details, mobiles as text; the Excel box has a tick "Also send to email" → `POST /api/orders/export/email`, same safety as Send to Owner, audit `EXCEL_EMAIL`).
 - `deploy/` – AWS server scripts (written for Lightsail, used on EC2): `setup-server.sh` (one time), `release.sh` (every upload), `upload.ps1` (run on Windows).
 

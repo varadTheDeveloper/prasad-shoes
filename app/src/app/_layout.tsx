@@ -27,7 +27,10 @@ function Gate() {
     <Stack key={lang} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.ground } }}>
       <Stack.Protected guard={!me}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
+      {/* Opened from the owner's reset email – works logged in or out. */}
+      <Stack.Screen name="reset-password" />
       <Stack.Protected guard={!!me}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="change-password" />

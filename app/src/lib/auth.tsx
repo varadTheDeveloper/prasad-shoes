@@ -12,6 +12,8 @@ interface AuthState {
   ready: boolean;
   login: (mobile: string, password: string) => Promise<Me>;
   logout: () => Promise<void>;
+  /** Forget the login on this device only (after a password reset, or when the server says the login ended). */
+  clearLocal: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -22,11 +24,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const qc = useQueryClient();
 
-  const logout = useCallback(async () => {
+  /** Forget the login on this device only (the server already refused it). */
+  const clearLocal = useCallback(async () => {
     await setToken(null);
     setMe(null);
     qc.clear();
   }, [qc]);
+
+  /** Log out: the server ends this device's login too, so a copied token stops working. */
+  const logout = useCallback(async () => {
+    try {
+      if (await getToken()) await api('POST', '/auth/logout', undefined, 5_000);
+    } catch {
+      // offline or already ended: still log out here
+    }
+    await clearLocal();
+  }, [clearLocal]);
 
   const refresh = useCallback(async () => {
     if (!(await getToken())) {
@@ -36,9 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setMe(await api<Me>('GET', '/me'));
     } catch (e: any) {
-      if (e?.status === 401) await logout();
+      if (e?.status === 401) await clearLocal();
     }
-  }, [logout]);
+  }, [clearLocal]);
 
   useEffect(() => {
     refresh().finally(() => setReady(true));
@@ -55,13 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setAuthErrorListener((e) => {
       if (e.status === 401) {
-        logout();
+        clearLocal();
       } else if (e.code === 'PASSWORD_CHANGE_REQUIRED') {
         setMe((m) => (m ? { ...m, mustChangePassword: true } : m));
         router.replace('/change-password');
       }
     });
-  }, [logout]);
+  }, [clearLocal]);
 
   const login = useCallback(async (mobile: string, password: string) => {
     const r = await api<{ token: string; user: Me }>('POST', '/auth/login', { mobile, password });
@@ -70,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return r.user;
   }, []);
 
-  const value = useMemo(() => ({ me, ready, login, logout, refresh }), [me, ready, login, logout, refresh]);
+  const value = useMemo(() => ({ me, ready, login, logout, clearLocal, refresh }), [me, ready, login, logout, clearLocal, refresh]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

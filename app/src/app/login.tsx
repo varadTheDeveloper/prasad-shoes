@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { Button, Field, Input, LangSwitch } from '@/components/ui';
 import { useLang } from '@/lib/i18n';
@@ -41,7 +42,8 @@ export default function Login() {
             <Input value={password} onChangeText={setPassword} secureTextEntry placeholder={t('Password')} onSubmitEditing={submit} autoComplete="password" />
           </Field>
           <Button title={t('Log in')} onPress={submit} loading={busy} style={{ marginTop: 8 }} />
-          <Text style={st.hint}>{t('Forgot password? Ask the owner to reset it.')}</Text>
+          <Button kind="link" title={t('Forgot password?')} onPress={() => router.push('/forgot-password')} style={{ marginTop: 14 }} />
+          <Text style={st.hint}>{t('Staff: ask the owner to reset your password.')}</Text>
         </View>
         <Text style={st.addr}>1306, Shukrawar Peth, Pune 411002</Text>
       </ScrollView>
@@ -54,6 +56,6 @@ const st = StyleSheet.create({
   box: { width: '100%', maxWidth: 400, alignSelf: 'center' },
   logo: { width: 200, height: 200, borderRadius: R.card, alignSelf: 'center' },
   sub: { fontSize: 15, color: C.muted, textAlign: 'center', marginTop: 10, marginBottom: 28 },
-  hint: { textAlign: 'center', color: C.muted, marginTop: 18, fontSize: 14 },
+  hint: { textAlign: 'center', color: C.muted, marginTop: 4, fontSize: 14 },
   addr: { textAlign: 'center', color: C.muted, fontSize: 13, marginTop: 48 },
 });

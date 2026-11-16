@@ -101,7 +101,9 @@ r.patch(
       if (b.resetPassword) {
         const hash = await bcrypt.hash(b.resetPassword, 10);
         await c.query(
-          `UPDATE users SET password_hash = $2, must_change_password = TRUE, failed_logins = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,
+          // token_version + 1: the staff member is logged out everywhere and must log in with the new temporary password.
+          `UPDATE users SET password_hash = $2, must_change_password = TRUE, failed_logins = 0, locked_until = NULL,
+                  token_version = token_version + 1, updated_at = now() WHERE id = $1`,
           [id, hash],
         );
         await audit(c, req.user.id, 'PASSWORD_RESET', 'users', id);

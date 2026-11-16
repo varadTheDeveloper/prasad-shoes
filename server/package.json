@@ -11,7 +11,7 @@
     "seed": "node dist/seed.js",
     "migrate:dev": "tsx src/migrate.ts",
     "seed:dev": "tsx src/seed.ts",
-    "test": "tsx --test ../shared/__tests__/*.test.ts test/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 ../shared/__tests__/*.test.ts test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

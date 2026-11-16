@@ -98,6 +98,32 @@ const MR: Record<string, string> = {
   Password: 'पासवर्ड',
   'Log in': 'लॉग इन करा',
   'Forgot password? Ask the owner to reset it.': 'पासवर्ड विसरलात? मालकांना रीसेट करायला सांगा.',
+  'Forgot password?': 'पासवर्ड विसरलात?',
+  'Staff: ask the owner to reset your password.': 'स्टाफ: पासवर्ड रीसेट करायला मालकांना सांगा.',
+
+  // ---- forgot / reset password (owner, by email)
+  'Forgot password': 'पासवर्ड विसरलात',
+  'Enter mobile number': 'मोबाइल नंबर टाका',
+  'Enter 10 digits': '10 अंक टाका',
+  'Owner: enter your mobile number. A link to set a new password will be emailed to the owner’s email.':
+    'मालक: तुमचा मोबाइल नंबर टाका. नवीन पासवर्ड ठेवण्याची लिंक मालकांच्या ईमेलवर पाठवली जाईल.',
+  'Email me a reset link': 'रीसेट लिंक ईमेलवर पाठवा',
+  'Staff: ask the owner to reset your password in Staff.': 'स्टाफ: मालकांना Staff मध्ये तुमचा पासवर्ड रीसेट करायला सांगा.',
+  '‹ Back to login': '‹ लॉगिनकडे परत',
+  "If this is the owner's mobile number, a reset link has been emailed to the owner. It works once, for 15 minutes.":
+    'हा मालकांचा मोबाइल नंबर असल्यास, रीसेट लिंक मालकांच्या ईमेलवर पाठवली आहे. ती एकदाच, 15 मिनिटांसाठी चालते.',
+  'Open the email on any phone or computer and tap the link to set a new password.':
+    'कोणत्याही फोन किंवा कॉम्प्युटरवर ईमेल उघडा आणि नवीन पासवर्ड ठेवण्यासाठी लिंकवर टॅप करा.',
+  'Password reset by email is not set up on the server yet. Ask the developer.':
+    'ईमेलद्वारे पासवर्ड रीसेट अजून सर्व्हरवर सेट केलेले नाही. डेव्हलपरला विचारा.',
+  'Set a new owner password': 'मालकांचा नवीन पासवर्ड ठेवा',
+  'This link has expired or was already used. Ask for a new one.': 'ही लिंक कालबाह्य झाली आहे किंवा आधीच वापरली आहे. नवीन लिंक मागवा.',
+  'This link is not complete': 'ही लिंक अपूर्ण आहे',
+  'Ask for a new link': 'नवीन लिंक मागवा',
+  'Please meet both rules below.': 'खालील दोन्ही नियम पूर्ण करा.',
+  'Password changed. Every phone and computer was logged out – log in with the new password.':
+    'पासवर्ड बदलला. सर्व फोन आणि कॉम्प्युटरवरून लॉग आउट झाले – नवीन पासवर्डने लॉग इन करा.',
+  'Go to login': 'लॉगिनकडे जा',
 
   // ---- change password
   'At least 6 characters': 'किमान 6 अक्षरे',
@@ -233,7 +259,6 @@ const MR: Record<string, string> = {
   'Enter name': 'नाव टाका',
   'Enter address': 'पत्ता टाका',
   '6 digits, not starting with 0': '6 अंक, 0 ने सुरू नसलेले',
-  'Enter 10 digits': '10 अंक टाका',
   'Same as Mobile 1 – leave empty or enter another number': 'मोबाइल 1 सारखाच आहे – रिकामे ठेवा किंवा दुसरा नंबर टाका',
   'Enter a number, e.g. 1299': 'आकडा टाका, उदा. 1299',
   'Enter COD amount': 'COD रक्कम टाका',
@@ -398,7 +423,6 @@ const MR: Record<string, string> = {
   'Email is not set up on the server yet.': 'सर्व्हरवर ईमेल अजून सेट केलेले नाही.',
   'Enter a 10-digit mobile': '10 अंकी मोबाइल टाका',
   'Enter city and pincode': 'शहर आणि पिनकोड टाका',
-  'Enter mobile number': 'मोबाइल नंबर टाका',
   'Enter password': 'पासवर्ड टाका',
   'Enter phone numbers': 'फोन नंबर टाका',
   'Enter shop name': 'दुकानाचे नाव टाका',

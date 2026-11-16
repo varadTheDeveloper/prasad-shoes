@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { setToken } from '@/lib/storage';
 import { Banner, Button, Card, Field, Input, Page } from '@/components/ui';
 import { C } from '@/lib/theme';
 import { t } from '@/lib/i18n';
@@ -30,7 +31,9 @@ export default function ChangePassword() {
     if (!checks.every((c) => c.ok)) return setTop(t('Please meet all three rules below.'));
     setBusy(true);
     try {
-      await api('POST', '/auth/change-password', { oldPassword: oldP, newPassword: newP });
+      // The server ends every older login and answers a fresh one for this device.
+      const r = await api<{ token?: string }>('POST', '/auth/change-password', { oldPassword: oldP, newPassword: newP });
+      if (r?.token) await setToken(r.token);
       await refresh();
       router.replace('/');
     } catch (e) {

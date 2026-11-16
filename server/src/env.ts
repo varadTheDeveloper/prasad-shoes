@@ -16,6 +16,9 @@ export const env = {
   /** Comma-separated origins allowed to call the API from a browser (only needed in development). */
   corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   isProd: process.env.NODE_ENV === 'production',
+  /** The website's own address, e.g. https://144-24-139-223.sslip.io – used in the "Forgot password?" email link.
+   *  Fixed here (never taken from the request) so a fake Host header cannot send the owner a link to another site. */
+  publicUrl: (process.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, ''),
   /** "Send to Owner" email (optional: without it the button answers "Email is not set up"). Server only. */
   mail: {
     /** One or more addresses, comma-separated: OWNER_EMAIL=owner@gmail.com,tester@gmail.com */

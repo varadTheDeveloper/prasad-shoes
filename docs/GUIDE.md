@@ -205,7 +205,7 @@ Tests: `cd server` → `npm test` (parser tests). Full API tests: start the API,
 | HTTPS failed during setup | Port 80 open? Domain pointing to the IP? Then run `sudo certbot --nginx -d <your address>` |
 | pgAdmin cannot connect | Check the SSH key path, user `ubuntu`, and host `localhost` in the Connection tab |
 | Staff forgot password | Owner → Staff → **Reset password** |
-| Owner forgot password | Run the Step 4 seed command again with a new password |
+| Owner forgot password | Login screen → **Forgot password?** → owner's mobile → link in the owner's email (works once, 15 minutes). Needs `PUBLIC_URL` in `server/.env`. Without email: run the Step 4 seed command again with a new password |
 | `ssh` says "UNPROTECTED PRIVATE KEY" | Run the two `icacls` lines from Step 1 |
 
 ---

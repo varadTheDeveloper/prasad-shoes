@@ -64,7 +64,9 @@ test('owner adds staff; staff must change temp password first', { skip }, async 
   assert.equal(blocked.status, 403);
   assert.equal(blocked.data.error.code, 'PASSWORD_CHANGE_REQUIRED');
   const ch = await call('POST', '/auth/change-password', { oldPassword: 'temp123', newPassword: 'rahul123' }, login.data.token);
-  assert.equal(ch.status, 204);
+  assert.equal(ch.status, 200); // answers a fresh token for this device (16 Nov 2026)
+  assert.ok(ch.data.token);
+  assert.equal((await call('GET', '/me', undefined, login.data.token)).status, 401, 'the temporary-password login ends');
   const again = await call('POST', '/auth/login', { mobile: staffMobile, password: 'rahul123' });
   staff = again.data.token;
   assert.equal(again.data.mustChangePassword, false);
@@ -396,4 +398,33 @@ test('Prepaid and COD are listed separately: type filter on list, Select all, co
   const x = await call('GET', `/orders/export?${qs}&type=COD`, undefined, owner);
   assert.equal(x.status, 200);
   assert.equal(x.headers.get('x-file-name'), `orders-cod-${day}-to-${day}.xlsx`);
+});
+
+test('Sessions end: password change, owner reset and Log out (16 Nov 2026)', { skip }, async () => {
+  const m = rnd();
+  const add = await call('POST', '/users', { name: 'Session Test', mobile: m, tempPassword: 'temp123' }, owner);
+  assert.equal(add.status, 201, JSON.stringify(add.data));
+  const t0 = (await call('POST', '/auth/login', { mobile: m, password: 'temp123' })).data.token;
+  // change password: this device gets a fresh token, every older token ends
+  const other = (await call('POST', '/auth/login', { mobile: m, password: 'temp123' })).data.token; // a 2nd device
+  const ch = await call('POST', '/auth/change-password', { oldPassword: 'temp123', newPassword: 'staff123' }, t0);
+  assert.equal(ch.status, 200, JSON.stringify(ch.data));
+  assert.equal((await call('GET', '/me', undefined, t0)).status, 401);
+  assert.equal((await call('GET', '/me', undefined, other)).status, 401);
+  const fresh = ch.data.token as string;
+  assert.equal((await call('GET', '/orders?limit=1', undefined, fresh)).status, 200);
+
+  // Log out ends only that device
+  const phone = (await call('POST', '/auth/login', { mobile: m, password: 'staff123' })).data.token;
+  assert.equal((await call('POST', '/auth/logout', undefined, phone)).status, 204);
+  assert.equal((await call('GET', '/me', undefined, phone)).status, 401);
+  assert.equal((await call('POST', '/auth/logout', undefined, phone)).status, 401);
+  assert.equal((await call('GET', '/me', undefined, fresh)).status, 200, 'the other device stays logged in');
+
+  // owner resets the password: the staff member is logged out everywhere
+  assert.equal((await call('PATCH', `/users/${add.data.id}`, { resetPassword: 'temp456' }, owner)).status, 200);
+  assert.equal((await call('GET', '/me', undefined, fresh)).status, 401);
+
+  // a broken token = 401
+  assert.equal((await call('GET', '/me', undefined, 'not.a.token')).status, 401);
 });

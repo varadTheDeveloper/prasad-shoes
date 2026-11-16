@@ -24,7 +24,8 @@ async function main() {
     `INSERT INTO users (name, mobile, password_hash, role, must_change_password)
      VALUES ($1, $2, $3, 'ADMIN', FALSE)
      ON CONFLICT (mobile) DO UPDATE SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash,
-       role = 'ADMIN', is_active = TRUE, must_change_password = FALSE, failed_logins = 0, locked_until = NULL, updated_at = now()
+       role = 'ADMIN', is_active = TRUE, must_change_password = FALSE, failed_logins = 0, locked_until = NULL,
+       token_version = users.token_version + 1, updated_at = now()
      RETURNING id`,
     [name, mobile, hash],
   );

@@ -27,7 +27,7 @@ cd app;    npx expo start -c                          # w = website (localhost:8
 
 ## Tests (run before every change is called done)
 ```powershell
-cd server; npm test                                   # parser, label, pincode tests
+cd server; npm test                                   # parser, label, pincode tests (API needs PUBLIC_URL set for the reset test)
 # full API tests: start the API, then
 $env:API_URL="http://localhost:3000"; $env:OWNER_MOBILE="7020861805"; $env:OWNER_PASSWORD="owner123"; npm test
 cd app; npx tsc --noEmit
@@ -95,3 +95,10 @@ Server-only changes do not need a new APK.
   One send at a time per user (advisory lock), same request id = no second email (also Resend Idempotency-Key),
   10 per hour (audit_logs `LABEL_EMAIL`). Never log customer details.
   Tests: `test/email.test.ts` with a fake Resend server (`RESEND_TEST_PORT`; API runs with `RESEND_API_URL=http://127.0.0.1:<port>`).
+- **Sessions + Forgot password** (16 Nov 2026, migration 006): every token carries `users.token_version` (`tv`) and its own id (`jti`).
+  Password change (answers a fresh token for this device), owner's staff reset, email reset and `npm run seed` raise token_version →
+  all older logins end. `POST /api/auth/logout` ends only that device (`revoked_tokens`). Owner only: `POST /api/auth/forgot {mobile}`
+  always answers the same message; for an active ADMIN it emails a one-time link `PUBLIC_URL/reset-password?key=…` (15 min,
+  max 3 unused links per 15 min, only the key's SHA-256 is stored) to `OWNER_EMAIL` via Resend. `PUBLIC_URL` comes only from
+  server/.env (never from the Host header). Reset page: `app/reset-password.tsx` (works logged in or out). Staff ask the owner.
+  Test files run one at a time (`--test-concurrency=1`): the reset test changes the owner password and sets it back.

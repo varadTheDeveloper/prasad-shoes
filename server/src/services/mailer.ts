@@ -13,11 +13,11 @@ export function mailReady(): boolean {
 }
 
 /**
- * Sends one email with one Word attachment to the OWNER_EMAIL address(es). Resolves only when Resend has accepted the
+ * Sends one email (with one attachment, or none) to the OWNER_EMAIL address(es). Resolves only when Resend has accepted the
  * message (it answers with a message id); throws otherwise. `idempotencyKey`: Resend sends a repeated
  * request with the same key only once.
  */
-export async function sendToOwner(mail: { subject: string; text: string; fileName: string; file: Buffer; idempotencyKey?: string }) {
+export async function sendToOwner(mail: { subject: string; text: string; fileName?: string; file?: Buffer; idempotencyKey?: string }) {
   const m = env.mail;
   const res = await fetch(`${m.resendUrl}/emails`, {
     method: 'POST',
@@ -31,7 +31,7 @@ export async function sendToOwner(mail: { subject: string; text: string; fileNam
       to: m.ownerEmails,
       subject: mail.subject,
       text: mail.text,
-      attachments: [{ filename: mail.fileName, content: mail.file.toString('base64') }],
+      ...(mail.file && mail.fileName ? { attachments: [{ filename: mail.fileName, content: mail.file.toString('base64') }] } : {}),
     }),
     signal: AbortSignal.timeout(60_000),
   });

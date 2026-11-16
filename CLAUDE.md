@@ -98,7 +98,10 @@ Server-only changes do not need a new APK.
 - **Sessions + Forgot password** (16 Nov 2026, migration 006): every token carries `users.token_version` (`tv`) and its own id (`jti`).
   Password change (answers a fresh token for this device), owner's staff reset, email reset and `npm run seed` raise token_version →
   all older logins end. `POST /api/auth/logout` ends only that device (`revoked_tokens`). Owner only: `POST /api/auth/forgot {mobile}`
-  always answers the same message; for an active ADMIN it emails a one-time link `PUBLIC_URL/reset-password?key=…` (15 min,
+  always answers the same message; for an active ADMIN it emails a one-time link `PUBLIC_URL/reset-password#key=…` (key after `#`: never sent to / logged by the server; 15 min,
   max 3 unused links per 15 min, only the key's SHA-256 is stored) to `OWNER_EMAIL` via Resend. `PUBLIC_URL` comes only from
   server/.env (never from the Host header). Reset page: `app/reset-password.tsx` (works logged in or out). Staff ask the owner.
+  Every owner password change (reset link or Change password) emails "the owner password was changed" to OWNER_EMAIL.
+  Website security headers + CSP: `deploy/nginx-headers.conf` → /etc/nginx/snippets/prasad-shoes-headers.conf, included in the
+  `location /` and `/_expo/` blocks (nginx drops server-level add_header there); `release.sh` installs/updates it, rolls back if `nginx -t` fails.
   Test files run one at a time (`--test-concurrency=1`): the reset test changes the owner password and sets it back.

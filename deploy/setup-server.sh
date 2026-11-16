@@ -119,6 +119,7 @@ fi
 say "7/9  Nginx (website + /api) and HTTPS certificate"
 sudo apt-get install -y nginx certbot python3-certbot-nginx
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+sudo install -m 644 "$SCRIPT_DIR/nginx-headers.conf" /etc/nginx/snippets/prasad-shoes-headers.conf
 sed "s/__DOMAIN__/$DOMAIN/g" "$SCRIPT_DIR/nginx.conf" | sudo tee /etc/nginx/sites-available/prasad-shoes >/dev/null
 sudo ln -sf /etc/nginx/sites-available/prasad-shoes /etc/nginx/sites-enabled/prasad-shoes
 sudo rm -f /etc/nginx/sites-enabled/default

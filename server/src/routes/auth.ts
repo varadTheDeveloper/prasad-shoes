@@ -91,6 +91,7 @@ r.post(
     );
     // This device stays logged in with a fresh token (older app versions ignore it and simply log in again).
     res.json({ token: signToken(req.user.id, up.rows[0].token_version) });
+    if (req.user.role === 'ADMIN') sendPasswordChangedAlert('from Change password in the app');
   }),
 );
 
@@ -155,7 +156,8 @@ r.post(
         sha256(key),
         RESET_MINUTES,
       ]);
-      const link = `${env.publicUrl}/reset-password?key=${key}`;
+      // The key goes after '#': browsers never send that part to the server, so it never lands in server logs.
+      const link = `${env.publicUrl}/reset-password#key=${key}`;
       await sendToOwner({
         subject: 'Prasad Shoes – reset the owner password',
         text: [
@@ -180,6 +182,30 @@ r.post(
     }
   }),
 );
+
+/** "Your password was changed" email to OWNER_EMAIL, so the owner hears at once if it was not them.
+ *  Sent after the answer; a failure is only logged (the password change itself has already happened). */
+function sendPasswordChangedAlert(how: string) {
+  if (!mailReady()) return;
+  const when = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  }).format(new Date());
+  sendToOwner({
+    subject: 'Prasad Shoes – the owner password was changed',
+    text: [
+      'Hello,',
+      '',
+      `The owner password of the Prasad Shoes app was changed on ${when} (India time), ${how}.`,
+      'Other phones and computers logged in as the owner were logged out.',
+      '',
+      'If this was you, there is nothing to do.',
+      'If this was NOT you: open the app login page, tap "Forgot password?" and set a new password at once,',
+      'and check who else can read this email account.',
+      '',
+      'Prasad Shoes',
+    ].join('\n'),
+  }).catch((e) => console.error(`[password-alert] ${String((e as Error)?.message ?? e).slice(0, 200)}`));
+}
 
 const keyField = z.string().min(20, 'This link is not complete').max(200);
 const linkBroken = () => new HttpError(400, 'VALIDATION', 'This link has expired or was already used. Ask for a new one.');
@@ -224,6 +250,7 @@ r.post(
       await audit(c, userId, 'PASSWORD_RESET_DONE', 'users', userId);
     });
     res.status(204).end();
+    sendPasswordChangedAlert('with a reset link from email');
   }),
 );
 

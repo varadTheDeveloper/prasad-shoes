@@ -12,8 +12,15 @@ import { C } from '@/lib/theme';
 export default function ResetPassword() {
   const { t } = useLang();
   const { me, clearLocal } = useAuth();
-  const { key: rawKey } = useLocalSearchParams<{ key?: string }>();
-  const key = String(rawKey ?? '');
+  const { key: queryKey } = useLocalSearchParams<{ key?: string }>();
+  // The email link carries the key after '#' (/reset-password#key=…): browsers never send that part to the
+  // server, so the key is not in any server log. Read once, then removed from the address bar and history.
+  const [key] = useState(() => {
+    const loc = Platform.OS === 'web' ? globalThis.location : undefined;
+    const fromHash = new URLSearchParams((loc?.hash ?? '').replace(/^#/, '')).get('key');
+    if (fromHash && loc) globalThis.history?.replaceState(globalThis.history.state, '', loc.pathname);
+    return fromHash || String(queryKey ?? '');
+  });
   const [state, setState] = useState<'checking' | 'ready' | 'bad' | 'done'>('checking');
   const [newP, setNewP] = useState('');
   const [conf, setConf] = useState('');

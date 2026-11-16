@@ -284,7 +284,9 @@ test('at most 10 emails per hour per owner', { skip }, async () => {
 
 // ------------------------------------------------------------------ Forgot password (owner only, 16 Nov 2026)
 // Needs PUBLIC_URL in the API's .env. Runs last in this file: it changes the owner password and sets it back.
-const keyOf = (m: Mail) => m.text.match(/\/reset-password\?key=([A-Za-z0-9_-]+)/)?.[1] ?? '';
+const keyOf = (m: Mail) => m.text.match(/\/reset-password#key=([A-Za-z0-9_-]+)/)?.[1] ?? '';
+const isLink = (m: Mail) => /reset the owner password/.test(m.subject);
+const isAlert = (m: Mail) => /owner password was changed/.test(m.subject);
 async function mailsAfter(n: number, want: number, ms = 3000) {
   for (const end = Date.now() + ms; Date.now() < end && inbox.length < n + want; ) await new Promise((r) => setTimeout(r, 50));
   await new Promise((r) => setTimeout(r, 300)); // a little longer: catch an email that should NOT come
@@ -308,8 +310,9 @@ test('Forgot password: same answer for every number; only the owner gets a link,
     const r = await call('POST', '/auth/forgot', { mobile: process.env.OWNER_MOBILE });
     assert.deepEqual(r.data, unknown.data);
   }
-  const mails = await mailsAfter(n, 4);
+  const mails = (await mailsAfter(n, 4)).filter(isLink);
   assert.equal(mails.length, 3, 'the 4th request within 15 minutes sends nothing');
+  assert.ok(!mails[0].text.includes('?key='), 'key only after #, never in the part the server sees');
   for (const m of mails) {
     assert.deepEqual(m.to, OWNER_EMAILS); // only the server's OWNER_EMAIL
     assert.equal(m.attachments, undefined);
@@ -328,7 +331,12 @@ test('Reset link: works once, logs every device out, old links stop; then the pa
   assert.equal(before.status, 200);
   const temp = `Reset-${randomUUID().slice(0, 8)}`;
   try {
+    const n0 = inbox.length;
     assert.equal((await call('POST', '/auth/reset-password', { key: k3, newPassword: temp })).status, 204);
+    const alert = (await mailsAfter(n0, 1)).find(isAlert);
+    assert.ok(alert, '"password was changed" email after the reset');
+    assert.deepEqual(alert!.to, OWNER_EMAILS);
+    assert.ok(!/key=/.test(alert!.text), 'the alert carries no reset link');
     assert.equal((await call('GET', '/me', undefined, owner)).status, 401, 'old owner login ends at once');
     assert.equal((await call('POST', '/auth/reset-password', { key: k3, newPassword: temp + 'x' })).status, 400, 'used once');
     assert.equal((await call('POST', '/auth/reset-password/check', { key: k1 })).status, 400, 'other open links end too');
@@ -339,9 +347,9 @@ test('Reset link: works once, logs every device out, old links stop; then the pa
     // set the test owner password back through a second link
     const n = inbox.length;
     await call('POST', '/auth/forgot', { mobile: process.env.OWNER_MOBILE });
-    const [m] = await mailsAfter(n, 1);
+    const m = (await mailsAfter(n, 1)).find(isLink);
     assert.ok(m, 'second reset email');
-    assert.equal((await call('POST', '/auth/reset-password', { key: keyOf(m), newPassword: process.env.OWNER_PASSWORD })).status, 204);
+    assert.equal((await call('POST', '/auth/reset-password', { key: keyOf(m!), newPassword: process.env.OWNER_PASSWORD })).status, 204);
   }
   const back = await call('POST', '/auth/login', { mobile: process.env.OWNER_MOBILE, password: process.env.OWNER_PASSWORD });
   assert.equal(back.status, 200);

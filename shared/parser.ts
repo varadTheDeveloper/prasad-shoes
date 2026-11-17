@@ -362,7 +362,9 @@ function sizeAndRest(value: string): { size: string; rest: string } {
 // ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
-export function parseWhatsApp(text: string): ParseResult {
+/** `pairAfterEnd`: the COD reader took a size line off the end of the message ("Size 9 shahu COD 2400"),
+ *  so a size-less pair line just before it ("10 kapsi naal") still counts as a pair. */
+export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {}): ParseResult {
   const f: Record<Key, string> = {
     ship_name: '', address: '', landmark: '', district: '', state: '', pincode: '', mobile1: '', mobile2: '', size: '',
   };
@@ -374,7 +376,7 @@ export function parseWhatsApp(text: string): ParseResult {
   let note = '';
   // Every pair in the message, in order (client, 17 Nov 2026: 2 or 10 pairs go in ONE box, one label):
   // Size box = all sizes "7, 11", Note = every size line as written, joined with ", ".
-  const pairs: { size: string; text: string; price: number | null }[] = [];
+  const pairs: { size: string; text: string; price: number | null; at: number }[] = [];
 
   const lines = messageLines(text);
 
@@ -415,7 +417,7 @@ export function parseWhatsApp(text: string): ParseResult {
       // prints it as it is, without "9 no" again.
       const text = sz.rest ? (sz.size && lineRaw.includes(value) ? lineRaw.replace(/\s{2,}/g, ' ').trim() : sz.rest) : '';
       const a = sz.rest.match(PRODUCT_AMOUNT);
-      pairs.push({ size: sz.size, text, price: a ? parseAmount(a[1]) : null });
+      pairs.push({ size: sz.size, text, price: a ? parseAmount(a[1]) : null, at: lineNo });
       return;
     }
     // "Landmark- Radha Krishna" + "Mandir" on the next line -> "Radha Krishna Mandir"
@@ -425,7 +427,10 @@ export function parseWhatsApp(text: string): ParseResult {
   };
 
   let lineRaw = '';
+  let lineNo = -1; // position of the line in the message (pairs keep the message's order)
+  const looseAt: number[] = [];
   for (let raw of lines) {
+    lineNo++;
     // "(SIZE- 9 CUTKAAN KaPSHI 1799)": a size line in brackets is read like "SIZE- 9 CUTKAAN KaPSHI 1799".
     const wrapped = raw.match(/^\(\s*((?:size|sizes|साइज|साईज|माप)\b.*?)\s*\)?\s*$/i);
     if (wrapped) raw = wrapped[1];
@@ -508,16 +513,20 @@ export function parseWhatsApp(text: string): ParseResult {
       }
     }
     loose.push(value);
+    looseAt.push(lineNo);
     looseAfterContact.push(contactBefore && !lineHasContact);
   }
 
   // ------------------------------- Fallbacks -------------------------------
   const guessed: ParsedField[] = [];
-  const looseKept: string[] = [];
+  let looseKept: string[] = [];
+  // "9 kapsi maharaja naal" (no "Size", no price) between other size lines is a pair too (client, 18 Nov 2026);
+  // on its own it could be an address ("12 Shivaji Nagar"), so it is decided after the other pairs are known.
+  const maybePairs: { line: string; size: string; at: number }[] = [];
   loose.forEach((l, i) => {
     const prod = productLine(l, looseAfterContact[i]);
     if (prod) {
-      pairs.push({ size: prod.size, text: prod.note, price: prod.amount });
+      pairs.push({ size: prod.size, text: prod.note, price: prod.amount, at: looseAt[i] });
       if (prod.product && !product_name) product_name = prod.product;
       return;
     }
@@ -534,11 +543,26 @@ export function parseWhatsApp(text: string): ParseResult {
     // "10" or "9 no" on its own line = shoe size
     const sz = toAsciiDigits(l).match(/^(\d{1,2}(?:\.5)?)\s*(?:no|number|नंबर|नं)?\.?$/i);
     if (sz) {
-      pairs.push({ size: sz[1], text: '', price: null });
+      pairs.push({ size: sz[1], text: '', price: null, at: looseAt[i] });
       return;
     }
+    const mp = !mobiles.length && !pin ? toAsciiDigits(l).match(PRODUCT_RE) : null;
+    if (mp && Number(mp[1]) >= 1 && Number(mp[1]) <= 13) maybePairs.push({ line: l, size: mp[1], at: looseAt[i] });
     if (!onlyNumbers) looseKept.push(l);
   });
+  // A maybe-pair right before / after a pair line joins the pairs (again, for several in a row).
+  const endAt = lineNo + 1; // where the COD reader's size line was
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const m of maybePairs.splice(0)) {
+      if (pairs.some((x) => Math.abs(x.at - m.at) === 1) || (opts.pairAfterEnd && endAt - m.at === 1)) {
+        pairs.push({ size: m.size, text: m.line.replace(/\s{2,}/g, ' ').trim(), price: null, at: m.at });
+        looseKept = looseKept.filter((k) => k !== m.line);
+        grew = true;
+      } else maybePairs.push(m);
+    }
+  }
+  pairs.sort((a, b) => a.at - b.at);
   if (pairs.length) {
     f.size = pairs.map((x) => x.size).filter(Boolean).join(', ');
     note = pairs.map((x) => x.text).filter(Boolean).join(', ');
@@ -913,12 +937,14 @@ export function splitSize(size: string): { size: string; note: string } {
 /** COD message -> receiver fields (same as parseWhatsApp) + booking date, weight, COD amount, size + description. */
 export function parseCodMessage(text: string): CodParseResult {
   const parts = splitCod(text);
-  const r = parseWhatsApp(parts.to);
-  const sz = splitSize(r.size);
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
   const noteSize =
     parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ??
     toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
+  // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
+  const codIsLast = /\bcod\b/i.test(text.trimEnd().split('\n').pop() ?? '');
+  const r = parseWhatsApp(parts.to, { pairAfterEnd: !!noteSize && codIsLast });
+  const sz = splitSize(r.size);
   // Several pairs (17 Nov 2026): "Size 7 z patti kolhapur" + "Size 11 3 tail Sankeshwar COD. 2798" -> both pairs,
   // in order: Size "7, 11", Note "Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar" (COD 2798 is printed in front).
   const morePairs = r.pairs > 0 && !!parts.codNote;

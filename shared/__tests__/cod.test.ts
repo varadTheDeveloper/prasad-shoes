@@ -378,3 +378,28 @@ test('several pairs typed or edited by hand: the sizes print once, not twice', (
   // one size still as before
   assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '9', note: 'red' } as LabelOrder), 'PREPAID (9 no, red)');
 });
+
+test('a pair line without "Size" ("9 kapsi maharaja naal") between size lines is kept, in order (18 Nov 2026)', () => {
+  const msg = `Venkat Prahlad Gaekwad.
+Tirumala diary.peddamangalaram village.area.syno.290/A Chanda nagar.Road  p mangalaram moinabad T.S.state 
+PINCODE 501504
+  mob.9404181436
+Size 7 z patti kolhapur 
+Size 8 kapsi plus naal
+ 9 kapsi maharaja naal
+Size 11 3 tail Sankeshwar COD. 2798`;
+  const r = parseCodMessage(msg);
+  assert.equal(r.size, '7, 8, 9, 11');
+  assert.equal(r.pairs, 4);
+  assert.equal(r.note, 'Size 7 z patti kolhapur, Size 8 kapsi plus naal, 9 kapsi maharaja naal, Size 11 3 tail Sankeshwar');
+  assert.ok(!r.address.includes('maharaja'), 'not in the address');
+  assert.equal(labelOrderLine({ ...r, payment_type: 'COD', raw_message: msg }), 'COD 2798 (Size 7 z patti kolhapur, Size 8 kapsi plus naal, 9 kapsi maharaja naal, Size 11 3 tail Sankeshwar)');
+  // a house number line is still address: "12 Shivaji Nagar" with no size line next to it
+  const a = parseWhatsApp('Ramesh Patil\n12 Shivaji Nagar\nKolhapur 416001\n9822000006\nSize 8 red kapshi');
+  assert.ok(a.address.includes('12 Shivaji Nagar'));
+  assert.equal(a.size, '8');
+  // first pair line without "Size", the next with it
+  const b = parseCodMessage('Ramesh Patil\nShivaji Nagar, Kolhapur 416001\n9822000006\n10 kapsi naal\nSize 9 shahu COD 2400');
+  assert.equal(b.size, '10, 9');
+  assert.equal(b.note, '10 kapsi naal, Size 9 shahu');
+});

@@ -75,6 +75,11 @@ Server-only changes do not need a new APK.
   `saysCod` = "COD 2250" in the message: on the PREPAID screen a red box above Save asks "is this a COD order?"
   (Switch to COD = same message read as COD / Keep PREPAID); Save waits for the answer, never switches by itself.
   COD reader: a size written before "COD" ("Size 7 COD 2250") is part of the note → "COD 2250 (Size 7)".
+  Several pairs (client, 17 Nov 2026): 2 or 10 pairs to one address = ONE order, ONE box, ONE label. COD amount in the
+  message = total for all pairs; no COD = prepaid. Size box = every size in order ("7, 11"), Note = every size line as
+  written joined with ", " (COD amount kept out: "COD 2798 (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)").
+  `ParseResult.pairs` → "2 pairs · one box, one label" tag; Excel "Pairs" column (`pairCount(size)`); prices on every
+  pair line add up to Amount (prepaid). Migration 007: size VARCHAR(100), note VARCHAR(500).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

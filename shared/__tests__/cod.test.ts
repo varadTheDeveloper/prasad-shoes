@@ -318,3 +318,63 @@ Size 7 COD 2250`);
   // a COD line without a size before it is unchanged
   assert.equal(parseCodMessage('Ramesh Patil\nKothrud Pune 411038\n9822000003\nCOD 1299 Size-7 no sanke').note, 'Size-7 no sanke');
 });
+
+// ------------------------------------------------------------------ several pairs, one box, one label (client, 17 Nov 2026)
+const TWO_PAIRS = `Venkat Prahlad Gaekwad.
+Tirumala diary.peddamangalaram village.area.syno.290/A Chanda nagar.Road  p mangalaram moinabad T.S.state 
+PINCODE 501504
+  mob.9404181436
+Size 7 z patti kolhapur 
+Size 11 3 tail Sankeshwar COD. 2798`;
+
+test('2 pairs on COD: both on the one label, sizes "7, 11", COD total 2798', () => {
+  const r = parseCodMessage(TWO_PAIRS);
+  assert.equal(r.size, '7, 11');
+  assert.equal(r.pairs, 2);
+  assert.equal(r.amount, 2798);
+  assert.equal(r.note, 'Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar');
+  assert.equal(r.pincode, '501504');
+  assert.equal(r.mobile1, '9404181436');
+  assert.equal(labelOrderLine({ ...r, payment_type: 'COD', raw_message: TWO_PAIRS }), 'COD 2798 (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)');
+});
+
+test('2 pairs pasted on PREPAID: both kept, and "COD. 2798" (with a dot) makes the screen ask', () => {
+  const r = parseWhatsApp(TWO_PAIRS);
+  assert.equal(r.size, '7, 11');
+  assert.equal(r.pairs, 2);
+  assert.equal(r.saysCod, 2798);
+  const noCod = TWO_PAIRS.replace(' COD. 2798', '');
+  const p = parseWhatsApp(noCod);
+  assert.equal(p.note, 'Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar');
+  assert.equal(p.saysCod, null);
+  assert.equal(labelOrderLine({ ...p, payment_type: 'PREPAID', raw_message: noCod }), 'PREPAID (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)');
+});
+
+test('10 pairs: every size in order, nothing lost; prices on every line add up on PREPAID', () => {
+  const sizes = [7, 8, 8, 9, 10, 11, 6, 7, 9, 10];
+  const msg = 'Ravi Kumar\nFlat 3, MG Road, Pune 411001\n9822000004\n' + sizes.map((n, i) => `Size ${n} kolhapuri ${i + 1}`).join('\n') + '\nCOD 15990';
+  const r = parseCodMessage(msg);
+  assert.equal(r.pairs, 10);
+  assert.equal(r.size, sizes.join(', '));
+  assert.equal(r.amount, 15990);
+  assert.ok(r.note.length <= 500 && r.size.length <= 100, 'fits the database');
+  const pre = parseWhatsApp('Sita Rao\nLane 2, Kothrud, Pune 411038\n9822000005\nSize 8 red kapshi 1299\nSize 6 black 999');
+  assert.equal(pre.size, '8, 6');
+  assert.equal(pre.amount, 2298);
+  // one pair stays exactly as before
+  assert.equal(parseWhatsApp('Sita Rao\nLane 2, Kothrud, Pune 411038\n9822000005\nSize 8 red kapshi 1299').size, '8');
+  assert.equal(parseWhatsApp('Sita Rao\nLane 2, Kothrud, Pune 411038\n9822000005\nSize 8 red kapshi 1299').pairs, 1);
+});
+
+test('several pairs typed or edited by hand: the sizes print once, not twice', () => {
+  const base = { ship_name: 'A', address: 'B', pincode: '411001', mobile1: '9822000001', raw_message: '' };
+  assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 2798, size: '7, 11', note: 'Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar' } as LabelOrder),
+    'COD 2798 (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)');
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '7, 11', note: 'Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar' } as LabelOrder),
+    'PREPAID (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)');
+  // only sizes typed, no note
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '7, 11', note: '' } as LabelOrder), 'PREPAID (Size 7, 11)');
+  assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 999, size: '7, 11', note: '' } as LabelOrder), 'COD 999 (Size 7, 11)');
+  // one size still as before
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '9', note: 'red' } as LabelOrder), 'PREPAID (9 no, red)');
+});

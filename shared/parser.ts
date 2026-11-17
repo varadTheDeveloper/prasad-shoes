@@ -39,6 +39,8 @@ export interface ParseResult {
   /** From a product line like "11 no black shahu 2999+ naal": product "black shahu", note "naal". */
   product_name: string;
   note: string;
+  /** Number of pairs (size lines) found: the paste screen shows "2 pairs" when there are several. */
+  pairs: number;
   /** "COD 2250" written in the message (amount), else null. The Prepaid screen asks "is this a COD order?". */
   saysCod: number | null;
   /** Fields that were filled (for the "8 fields auto-filled" chip). */
@@ -370,6 +372,9 @@ export function parseWhatsApp(text: string): ParseResult {
   let contactSeen = false;
   let product_name = '';
   let note = '';
+  // Every pair in the message, in order (client, 17 Nov 2026: 2 or 10 pairs go in ONE box, one label):
+  // Size box = all sizes "7, 11", Note = every size line as written, joined with ", ".
+  const pairs: { size: string; text: string; price: number | null }[] = [];
 
   const lines = messageLines(text);
 
@@ -406,14 +411,11 @@ export function parseWhatsApp(text: string): ParseResult {
       // The words after it go to Note exactly as written; a price in them also fills Amount.
       // No clear size number -> Size stays empty and the text goes to Note (nothing lost).
       const sz = sizeAndRest(value);
-      if (sz.size) f.size = sz.size;
-      if (sz.rest) {
-        // Note = the whole size line exactly as written ("SIZE- 9 CUTKAAN KaPSHI 1799"); the label then
-        // prints it as it is, without "9 no" again.
-        if (!note) note = sz.size && lineRaw.includes(value) ? lineRaw.replace(/\s{2,}/g, ' ').trim() : sz.rest;
-        const a = sz.rest.match(PRODUCT_AMOUNT);
-        if (a && amount === null) amount = parseAmount(a[1]);
-      }
+      // Note text = the whole size line exactly as written ("SIZE- 9 CUTKAAN KaPSHI 1799"); the label then
+      // prints it as it is, without "9 no" again.
+      const text = sz.rest ? (sz.size && lineRaw.includes(value) ? lineRaw.replace(/\s{2,}/g, ' ').trim() : sz.rest) : '';
+      const a = sz.rest.match(PRODUCT_AMOUNT);
+      pairs.push({ size: sz.size, text, price: a ? parseAmount(a[1]) : null });
       return;
     }
     // "Landmark- Radha Krishna" + "Mandir" on the next line -> "Radha Krishna Mandir"
@@ -515,10 +517,8 @@ export function parseWhatsApp(text: string): ParseResult {
   loose.forEach((l, i) => {
     const prod = productLine(l, looseAfterContact[i]);
     if (prod) {
-      if (prod.size && !f.size) f.size = prod.size;
+      pairs.push({ size: prod.size, text: prod.note, price: prod.amount });
       if (prod.product && !product_name) product_name = prod.product;
-      if (prod.note && !note) note = prod.note;
-      if (prod.amount !== null && amount === null) amount = prod.amount;
       return;
     }
     const mobiles = findMobiles(l);
@@ -534,11 +534,20 @@ export function parseWhatsApp(text: string): ParseResult {
     // "10" or "9 no" on its own line = shoe size
     const sz = toAsciiDigits(l).match(/^(\d{1,2}(?:\.5)?)\s*(?:no|number|नंबर|नं)?\.?$/i);
     if (sz) {
-      if (!f.size) f.size = sz[1];
+      pairs.push({ size: sz[1], text: '', price: null });
       return;
     }
     if (!onlyNumbers) looseKept.push(l);
   });
+  if (pairs.length) {
+    f.size = pairs.map((x) => x.size).filter(Boolean).join(', ');
+    note = pairs.map((x) => x.text).filter(Boolean).join(', ');
+    if (amount === null) {
+      // 2+ pairs each with a price -> the total; otherwise the one price written.
+      const prices = pairs.map((x) => x.price);
+      amount = pairs.length > 1 && prices.every((x) => x !== null) ? prices.reduce((t, x) => t! + x!, 0) : (prices.find((x) => x !== null) ?? null);
+    }
+  }
   if (!f.ship_name && looseKept.length >= 2 && looksLikeAddress(looseKept[0]) && !looksLikeName(looseKept[0])) {
     // Address written first, name on a later line (no labels): take the name-like line as the name.
     const i = looseKept.findIndex((l, k) => k > 0 && looksLikeName(l));
@@ -602,10 +611,10 @@ export function parseWhatsApp(text: string): ParseResult {
   const missing = required.filter((k) => !f[k as Key]);
 
   // "COD 2250" / "cod-1499" / "COD Rs 999" anywhere in the message.
-  const codM = toAsciiDigits(text).match(/\bcod\b\s*[:\-–=]?\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})(?![\d])/i);
+  const codM = toAsciiDigits(text).match(/\bcod\b\s*[:\-–=.]?\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})(?![\d])/i);
   const saysCod = codM ? Number(codM[1]) : null;
 
-  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod };
+  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod, pairs: pairs.length };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -890,6 +899,11 @@ function splitCod(text: string) {
   return { to: to.join('\n'), from: from.join('\n'), date, weight, amount, codNote };
 }
 
+/** Number of pairs in an order = the sizes in its Size box ("7, 11" -> 2, "9" -> 1, "" -> 0). */
+export function pairCount(size: string | null | undefined): number {
+  return (size ?? '').split(',').filter((x) => x.trim()).length;
+}
+
 /** "8 pona sanke awaj" -> size "8" + description "pona sanke awaj". A size without words stays as it is. */
 export function splitSize(size: string): { size: string; note: string } {
   const m = size.trim().match(/^(\d{1,2}(?:\.5)?)\s*(?:no\.?|number|नंबर|नं\.?)?\s*[,\-–:]?\s*(\D.*)$/i);
@@ -905,10 +919,14 @@ export function parseCodMessage(text: string): CodParseResult {
   const noteSize =
     parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ??
     toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
+  // Several pairs (17 Nov 2026): "Size 7 z patti kolhapur" + "Size 11 3 tail Sankeshwar COD. 2798" -> both pairs,
+  // in order: Size "7, 11", Note "Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar" (COD 2798 is printed in front).
+  const morePairs = r.pairs > 0 && !!parts.codNote;
   const out: CodParseResult = {
     ...r,
-    size: sz.size || noteSize,
-    note: parts.codNote || sz.note || r.note,
+    size: morePairs ? [r.size, noteSize].filter(Boolean).join(', ') : sz.size || noteSize,
+    note: morePairs ? [r.note, parts.codNote].filter(Boolean).join(', ') : parts.codNote || sz.note || r.note,
+    pairs: morePairs ? r.pairs + (noteSize ? 1 : 0) : Math.max(r.pairs, noteSize || sz.size ? 1 : 0),
     amount: parts.amount ?? r.amount,
     booking_date: parts.date,
     weight: parts.weight,

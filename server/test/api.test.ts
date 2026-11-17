@@ -307,7 +307,7 @@ test('Excel export (.xlsx): owner gets every matching order with all details, st
   const JSZip = (await import('jszip')).default;
   const zip = await JSZip.loadAsync(buf);
   const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
-  for (const h of ['Order #', 'Date', 'Customer', 'Mobile 1', 'Product', 'Size', 'Note', 'Amount', 'Weight', 'Booking date'])
+  for (const h of ['Order #', 'Date', 'Customer', 'Mobile 1', 'Product', 'Size', 'Pairs', 'Note', 'Amount', 'Weight', 'Booking date'])
     assert.ok(sheet.includes(`>${h}<`), h);
   assert.ok(sheet.includes('<cols>') && sheet.includes('state="frozen"'));
   const list = await call('GET', `/orders?from=${day}&to=${day}&limit=1`, undefined, owner);
@@ -427,4 +427,17 @@ test('Sessions end: password change, owner reset and Log out (16 Nov 2026)', { s
 
   // a broken token = 401
   assert.equal((await call('GET', '/me', undefined, 'not.a.token')).status, 401);
+});
+
+test('10 pairs in one order: long Size and Note save, the label prints them all (17 Nov 2026)', { skip }, async () => {
+  const sizes = [7, 8, 8, 9, 10, 11, 6, 7, 9, 10];
+  const note = sizes.map((n, i) => `Size ${n} kolhapuri kapshi ${i + 1}`).join(', ');
+  assert.ok(note.length > 250 && note.length <= 500);
+  const r = await call('POST', '/orders', order({ ship_name: 'Ten Pairs', payment_type: 'COD', amount: 15990, size: sizes.join(', '), note }), owner);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.size, sizes.join(', '));
+  const p = await call('POST', '/labels/print', { orderIds: [r.data.id], markPrinted: false }, owner);
+  const html = await (await fetch(`${API}${p.data.url}`)).text();
+  assert.ok(html.includes('Size 10 kolhapuri kapshi 10'), 'the last pair is on the label');
+  assert.equal((await call('POST', '/orders', order({ note: 'x'.repeat(501) }), owner)).status, 400);
 });

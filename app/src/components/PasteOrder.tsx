@@ -36,6 +36,8 @@ interface Parsed {
   guessed: string[];
   /** "COD 2250" in the message (17 Nov 2026): on the Prepaid screen the person is asked "is this a COD order?" */
   saysCod?: number | null;
+  /** Pairs (size lines) in the message (17 Nov 2026): "2 pairs" tag when there are several – all go in one box. */
+  pairs?: number;
 }
 
 export function usePasteOrder() {
@@ -317,10 +319,13 @@ export function PasteBox({ s, wide, hideType }: { s: PasteOrderState; wide?: boo
       </Field>
       <Row style={{ alignItems: 'center', justifyContent: 'space-between', marginTop: -4, marginBottom: 12 }}>
         {s.parsed ? (
-          <Pill
-            kind={s.parsed.missing.length ? 'warn' : 'ok'}
-            text={t(s.parsed.missing.length ? '{n} filled · check highlighted' : '{n} fields auto-filled', { n: s.parsed.filled.length })}
-          />
+          <Row gap={6} style={{ flexWrap: 'wrap', flex: 1 }}>
+            <Pill
+              kind={s.parsed.missing.length ? 'warn' : 'ok'}
+              text={t(s.parsed.missing.length ? '{n} filled · check highlighted' : '{n} fields auto-filled', { n: s.parsed.filled.length })}
+            />
+            {(s.parsed.pairs ?? 0) > 1 ? <Pill kind="info" text={t('{n} pairs · one box, one label', { n: s.parsed.pairs })} /> : null}
+          </Row>
         ) : (
           <View />
         )}

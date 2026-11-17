@@ -7,7 +7,7 @@ import { can, requireAdmin, requirePermission, type AuthUser } from '../middlewa
 import { audit } from '../services/audit';
 import { buildXlsx, type Column } from '../services/xlsx';
 import { mailReady, sendToOwner } from '../services/mailer';
-import { normaliseForHash, normaliseMobile } from '../../../shared/parser';
+import { normaliseForHash, normaliseMobile, pairCount } from '../../../shared/parser';
 import { DEFAULT_PAYMENT, effectivePayment } from '../../../shared/features';
 import { isIsoDate } from '../../../shared/cod';
 
@@ -48,8 +48,8 @@ const fields = {
   mobile1: mobile(true),
   mobile2: mobile(false),
   product_name: opt(150),
-  size: opt(20),
-  note: opt(250),
+  size: opt(100), // every size of the order: "7, 8, 11" (several pairs, one box – 17 Nov 2026)
+  note: opt(500),
   // Prepaid or COD (shared/features.ts). With COD switched off every order is stored as PREPAID.
   payment_type: z.enum(['COD', 'PREPAID']).default(DEFAULT_PAYMENT).transform(effectivePayment),
   // Optional: blank ('' / null / missing) is saved as blank.
@@ -256,7 +256,8 @@ const EXPORT_COLS: Column[] = [
   { head: 'Mobile 1', width: 13 },
   { head: 'Mobile 2', width: 13 },
   { head: 'Product', width: 22, wrap: true },
-  { head: 'Size', width: 8 },
+  { head: 'Size', width: 10 },
+  { head: 'Pairs', width: 7 },
   { head: 'Note', width: 24, wrap: true },
   { head: 'Type', width: 9 },
   { head: 'Amount', width: 10 },
@@ -293,6 +294,7 @@ async function buildExport(query: unknown, u: AuthUser) {
     r.mobile2,
     r.product_name,
     r.size,
+    pairCount(r.size) || null,
     r.note,
     r.payment_type === 'COD' ? 'COD' : 'Prepaid',
     r.amount === null ? null : Number(r.amount),

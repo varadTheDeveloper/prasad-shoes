@@ -64,10 +64,13 @@ export function noteWithoutProduct(product: string | null | undefined, note: str
 
 /** The note already says this size as written ("SIZE- 9 CUTKAAN…", "Size-7 no sanke", "11 no black shahu"). */
 export function noteSaysSize(note: string, size: string | null | undefined): boolean {
-  const z = (size ?? '').trim();
-  if (!z || !note) return false;
-  const n = z.replace('.', '\\.');
-  return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?![\\d.])|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i').test(note);
+  // Several pairs ("7, 11", 17 Nov 2026): the note says the sizes when it says every one of them.
+  const all = (size ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!all.length || !note) return false;
+  return all.every((z) => {
+    const n = z.replace('.', '\\.');
+    return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?![\\d.])|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i').test(note);
+  });
 }
 
 /** The Note came from the pasted message (its words are in it, as written). */
@@ -84,7 +87,8 @@ export function orderLine(o: LabelOrder): string {
   if (noteIsPasted(o)) return `${o.payment_type === 'PREPAID' ? 'PREPAID' : `COD ${formatAmount(o.amount)}`.trim()} (${o.note!.trim()})`;
   const note = noteWithoutProduct(o.product_name, o.note);
   // The pasted note is printed as written; "9 no" only when the note doesn't already say the size.
-  const parts = [o.product_name?.trim(), o.size?.trim() && !noteSaysSize(note, o.size) ? `${o.size.trim()} no` : '', note];
+  const sz = o.size?.trim() && !noteSaysSize(note, o.size) ? (o.size.includes(',') ? `Size ${o.size.trim()}` : `${o.size.trim()} no`) : '';
+  const parts = [o.product_name?.trim(), sz, note];
   // Prepaid: the amount typed in the form prints last – "PREPAID (red capsi, 9 no, 1299)" – unless the
   // product / note / pasted message already show that price ("4veni 999+sol" with amount 999 -> printed once).
   const amt = formatAmount(o.amount);

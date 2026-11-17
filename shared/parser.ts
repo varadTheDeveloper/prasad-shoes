@@ -332,9 +332,10 @@ function labelOfExact(raw: string): { key: Key; rest: string } | null {
 
 // ---------------------------------------------------------------------------------------------
 // Product line: "11 no black shahu 2999+ naal" -> size 11, amount 2999, note "black shahu 2999+ naal".
-// Starts with a shoe size. Read only when it can't be an address line ("12 Shivaji Nagar"): the size has
-// "no" after it and the line has an amount or comes after the pincode / mobile, or (without "no") it
-// comes after the pincode / mobile and has an amount.
+// Starts with a shoe size. Read only when it can't be an address line ("12 Shivaji Nagar"): with "no" after the
+// number it needs an amount or to come after the pincode / mobile; without "no" ("11 3 tail Sankeshwar") it must come
+// after the pincode / mobile, be 1–13 and have no address word. Client, 18 Nov 2026: the Size box is filled ONLY when
+// the size is clearly marked ("Size 11", "11 no", "11 number"); otherwise the line goes to Note as written, Size empty.
 // ---------------------------------------------------------------------------------------------
 const PRODUCT_LABEL = /^(?:product|products|product\s*name|item|item\s*name|प्रोडक्ट|उत्पादन)\s*[:：\-–—=.]\s*(.+)$/i;
 const PRODUCT_RE = /^(\d{1,2}(?:\.5)?)\s*(no\.?|number|नंबर|नं\.?)?\s+(.*\p{L}.*)$/iu;
@@ -344,10 +345,11 @@ function productLine(line: string, afterContact: boolean): { size: string; produ
   if (!m) return null;
   const rest = m[3];
   const a = rest.match(PRODUCT_AMOUNT);
-  const ok = m[2] ? !!a || afterContact : !!a && afterContact;
+  const marked = !!m[2];
+  const ok = marked ? !!a || afterContact : afterContact && Number(m[1]) >= 1 && Number(m[1]) <= 13 && !ADDRESS_WORD.test(rest);
   if (!ok) return null;
   // Product name is never guessed (staff type it): the words stay in Note exactly as written.
-  return { size: m[1], product: '', note: line.replace(/\s{2,}/g, ' ').trim(), amount: a ? parseAmount(a[1]) : null };
+  return { size: marked ? m[1] : '', product: '', note: line.replace(/\s{2,}/g, ' ').trim(), amount: a ? parseAmount(a[1]) : null };
 }
 
 /** "12 antique Hankare kapshi 1799+ naal" -> size "12", rest "antique Hankare kapshi 1799+ naal"; "9 no" -> "9", "";
@@ -547,7 +549,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
       return;
     }
     const mp = !mobiles.length && !pin ? toAsciiDigits(l).match(PRODUCT_RE) : null;
-    if (mp && Number(mp[1]) >= 1 && Number(mp[1]) <= 13) maybePairs.push({ line: l, size: mp[1], at: looseAt[i] });
+    if (mp && Number(mp[1]) >= 1 && Number(mp[1]) <= 13) maybePairs.push({ line: l, size: mp[2] ? mp[1] : '', at: looseAt[i] });
     if (!onlyNumbers) looseKept.push(l);
   });
   // A maybe-pair right before / after a pair line joins the pairs (again, for several in a row).
@@ -862,10 +864,11 @@ function codLine(raw: string): CodLine {
     // "(Rupees One Thousand Two Hundred Only)" / "-ONE THOUSAND … ONLY": the words are printed from the number.
     if (after && !(NUMBER_WORDS.test(after.replace(/^(?:rs\.?|rupees?|₹)\s*/i, '')) && /[a-z]{3}/i.test(after)) && /[\p{L}\p{N}]/u.test(after))
       out.note = after;
-    // "Size 7 COD 2250": a size written BEFORE "COD" belongs to the note too (17 Nov 2026) -> "COD 2250 (Size 7)".
+    // Words BEFORE "COD" are part of the note too, as written (17/18 Nov 2026): "Size 7 COD 2250" -> "COD 2250 (Size 7)",
+    // "11 3 tail Sankeshwar COD. 2798" -> "COD 2798 (11 3 tail Sankeshwar)". Only label words ("Total", "Amount") are left out.
     const before = ascii.slice(0, a.index).replace(/^[\s,|;:\-–—(]+|[\s,|;:\-–—(]+$/g, '').replace(/\s{2,}/g, ' ');
-    if (before && /^(?:(?:size|sizes|साइज|साईज|माप)\b|\d{1,2}(?:\.5)?\s*(?:no|number|नंबर|नं)\b)/i.test(before))
-      out.note = out.note ? `${before} ${out.note}` : before;
+    const words = before.replace(/\b(?:total|amount|amt|cod|rs|rupees?|inr|price|charges?|collect(?:ion)?|payable|pay|for|value|cash|on|delivery|of)\b/gi, ' ');
+    if (/\p{L}{2,}/u.test(words)) out.note = out.note ? `${before} ${out.note}` : before;
     // The amount line holds nothing for the address.
     rest = '';
   }
@@ -943,7 +946,7 @@ export function parseCodMessage(text: string): CodParseResult {
     toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
   // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
   const codIsLast = /\bcod\b/i.test(text.trimEnd().split('\n').pop() ?? '');
-  const r = parseWhatsApp(parts.to, { pairAfterEnd: !!noteSize && codIsLast });
+  const r = parseWhatsApp(parts.to, { pairAfterEnd: !!parts.codNote && codIsLast });
   const sz = splitSize(r.size);
   // Several pairs (17 Nov 2026): "Size 7 z patti kolhapur" + "Size 11 3 tail Sankeshwar COD. 2798" -> both pairs,
   // in order: Size "7, 11", Note "Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar" (COD 2798 is printed in front).
@@ -952,7 +955,7 @@ export function parseCodMessage(text: string): CodParseResult {
     ...r,
     size: morePairs ? [r.size, noteSize].filter(Boolean).join(', ') : sz.size || noteSize,
     note: morePairs ? [r.note, parts.codNote].filter(Boolean).join(', ') : parts.codNote || sz.note || r.note,
-    pairs: morePairs ? r.pairs + (noteSize ? 1 : 0) : Math.max(r.pairs, noteSize || sz.size ? 1 : 0),
+    pairs: morePairs ? r.pairs + 1 : Math.max(r.pairs, parts.codNote || sz.size ? 1 : 0),
     amount: parts.amount ?? r.amount,
     booking_date: parts.date,
     weight: parts.weight,

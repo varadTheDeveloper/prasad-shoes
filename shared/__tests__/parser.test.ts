@@ -407,7 +407,8 @@ test('product line variants; an address line starting with a number stays in the
   let r = parseWhatsApp(base + '9 no kolhapuri red');
   assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['9', '', null, '9 no kolhapuri red']);
   r = parseWhatsApp(base + '8 pona sanke 1999');
-  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['8', '', 1999, '8 pona sanke 1999']);
+  // no "Size" / "no" next to the 8: the Size box stays empty (staff fill it), the line is kept in Note (18 Nov 2026)
+  assert.deepEqual([r.size, r.product_name, r.amount, r.note], ['', '', 1999, '8 pona sanke 1999']);
   assert.equal(r.address, 'Shivaji Chowk, Latur');
   // "12 Shivaji Nagar" before the pincode / mobile is an address, not a product
   r = parseWhatsApp(`Ramesh Patil\n12 Shivaji Nagar, Latur\n413512\n9850011223`);

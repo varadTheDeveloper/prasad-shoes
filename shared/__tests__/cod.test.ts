@@ -389,7 +389,7 @@ Size 8 kapsi plus naal
  9 kapsi maharaja naal
 Size 11 3 tail Sankeshwar COD. 2798`;
   const r = parseCodMessage(msg);
-  assert.equal(r.size, '7, 8, 9, 11');
+  assert.equal(r.size, '7, 8, 11'); // "9 kapsi…" has no "Size": kept in Note, its size typed by staff (18 Nov 2026)
   assert.equal(r.pairs, 4);
   assert.equal(r.note, 'Size 7 z patti kolhapur, Size 8 kapsi plus naal, 9 kapsi maharaja naal, Size 11 3 tail Sankeshwar');
   assert.ok(!r.address.includes('maharaja'), 'not in the address');
@@ -400,6 +400,46 @@ Size 11 3 tail Sankeshwar COD. 2798`;
   assert.equal(a.size, '8');
   // first pair line without "Size", the next with it
   const b = parseCodMessage('Ramesh Patil\nShivaji Nagar, Kolhapur 416001\n9822000006\n10 kapsi naal\nSize 9 shahu COD 2400');
-  assert.equal(b.size, '10, 9');
+  assert.equal(b.size, '9');
   assert.equal(b.note, '10 kapsi naal, Size 9 shahu');
+});
+
+// ------------------------------------------------------------------ never lose a product line; Size only when marked (18 Nov 2026)
+const HEAD = `Venkat Prahlad Gaekwad.
+Tirumala diary.peddamangalaram village.area.syno.290/A Chanda nagar.Road  p mangalaram moinabad T.S.state 
+PINCODE 501504
+  mob.9404181436
+`;
+test('"11 3 tail Sankeshwar" without "Size": kept in Note as written (never lost, never in the address), Size empty', () => {
+  const cases: [string, 'COD' | 'PREPAID', string, string][] = [
+    ['11 3 tail Sankeshwar COD. 2798', 'COD', '11 3 tail Sankeshwar', 'COD 2798 (11 3 tail Sankeshwar)'],
+    ['11 3 tail Sankeshwar\nCOD 2798', 'COD', '11 3 tail Sankeshwar', 'COD 2798 (11 3 tail Sankeshwar)'],
+    ['11 3 tail Sankeshwar', 'PREPAID', '11 3 tail Sankeshwar', 'PREPAID (11 3 tail Sankeshwar)'],
+    ['7 z patti kolhapur\n11 3 tail Sankeshwar COD. 2798', 'COD', '7 z patti kolhapur, 11 3 tail Sankeshwar', 'COD 2798 (7 z patti kolhapur, 11 3 tail Sankeshwar)'],
+    ['Size 11 3 tail Sankeshwar COD. 2798', 'COD', 'Size 11 3 tail Sankeshwar', 'COD 2798 (Size 11 3 tail Sankeshwar)'],
+  ];
+  for (const [tail, type, note, label] of cases) {
+    const msg = HEAD + tail;
+    const r = type === 'COD' ? parseCodMessage(msg) : parseWhatsApp(msg);
+    assert.equal(r.note, note, tail);
+    assert.ok(!/tail|patti/.test(r.address), `not in the address: ${tail}`);
+    assert.equal(r.size, tail.startsWith('Size 11') ? '11' : '', `Size only when written as a size: ${tail}`);
+    assert.equal(labelOrderLine({ ...r, payment_type: type, raw_message: msg }), label);
+  }
+  // pairs are still counted for the tag, even without sizes
+  assert.equal(parseCodMessage(HEAD + '7 z patti kolhapur\n11 3 tail Sankeshwar COD. 2798').pairs, 2);
+  // a label word before COD is not a note
+  assert.equal(parseCodMessage(HEAD + 'Total COD 2798').note, '');
+});
+
+test('size typed by hand next to a pasted note: never printed twice', () => {
+  const base = { ship_name: 'A', address: 'B', pincode: '411001', mobile1: '9822000001' };
+  const msg = HEAD + '11 3 tail Sankeshwar COD. 2798';
+  // note from the paste: prints alone
+  assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 2798, size: '11', note: '11 3 tail Sankeshwar', raw_message: msg } as LabelOrder), 'COD 2798 (11 3 tail Sankeshwar)');
+  // note edited by hand, size typed: the line already starts with 11
+  assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 2798, size: '11', note: '11 3 tail Sankeshwar black', raw_message: '' } as LabelOrder), 'COD 2798 (11 3 tail Sankeshwar black)');
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '7, 11', note: '7 z patti kolhapur, 11 3 tail Sankeshwar', raw_message: '' } as LabelOrder), 'PREPAID (7 z patti kolhapur, 11 3 tail Sankeshwar)');
+  // a different size typed is still printed
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '9', note: 'kapsi naal', raw_message: '' } as LabelOrder), 'PREPAID (9 no, kapsi naal)');
 });

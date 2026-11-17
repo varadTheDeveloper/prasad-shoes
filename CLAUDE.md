@@ -80,9 +80,13 @@ Server-only changes do not need a new APK.
   written joined with ", " (COD amount kept out: "COD 2798 (Size 7 z patti kolhapur, Size 11 3 tail Sankeshwar)").
   `ParseResult.pairs` → "2 pairs · one box, one label" tag; Excel "Pairs" column (`pairCount(size)`); prices on every
   pair line add up to Amount (prepaid). Migration 007: size VARCHAR(100), note VARCHAR(500).
-  Pair lines keep the message's order; a pair line without "Size" ("9 kapsi maharaja naal", 1–13 + words) counts
-  when it sits next to another pair line (or just before a last-line "Size 9 … COD 2400"); alone it stays address
-  ("12 Shivaji Nagar"). Note = every pair line exactly as pasted – never skip or shorten one (client, 18 Nov 2026).
+  Pair lines keep the message's order. Client, 18 Nov 2026: NEVER lose a product line, and fill the Size box ONLY when the
+  size is clearly marked ("Size 11", "11 no", "11 number"). A line "1–13 + words" without that ("11 3 tail Sankeshwar",
+  "9 kapsi maharaja naal") goes to Note as written with Size empty (staff type it) when it comes after the pincode / mobile
+  (no address word) or next to another pair line (or just before a last COD line with product words); before the
+  contact and alone it stays address ("12 Shivaji Nagar"). Words before the COD amount ("11 3 tail Sankeshwar COD. 2798")
+  are note too, except label words (Total, Amount…). A size typed by hand never prints twice: a pasted note prints alone,
+  and `noteSaysSize` also accepts a note line that starts with that size ("11 3 tail…").
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

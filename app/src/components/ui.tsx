@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import type { ComponentRef, ReactNode, Ref } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -209,7 +209,7 @@ export function Button({
   );
 }
 
-export function Input({ error, highlight, style, ref, ...p }: TextInputProps & { error?: boolean; highlight?: boolean; ref?: Ref<TextInput> }) {
+export function Input({ error, highlight, style, ref, ...p }: TextInputProps & { error?: boolean; highlight?: boolean; ref?: Ref<ComponentRef<typeof TextInput>> }) {
   return (
     <TextInput
       ref={ref}

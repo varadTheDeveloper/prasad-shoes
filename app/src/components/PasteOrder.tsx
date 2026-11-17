@@ -7,7 +7,7 @@
 // reader (COD amount, size + description, booking date, weight); switching type starts the form again from the
 // same message, so Prepaid and COD details never mix.
 // Warnings never block: the first Save tap shows them, the second tap ("Checked – Save") saves.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -297,7 +297,7 @@ export function PasteBox({ s, wide, hideType }: { s: PasteOrderState; wide?: boo
   const { height } = useWindowDimensions();
   const [editing, setEditing] = useState(false);
   const big = editing && !wide;
-  const box = useRef<TextInput>(null);
+  const box = useRef<ComponentRef<typeof TextInput>>(null);
   const done = () => {
     box.current?.blur();
     Keyboard.dismiss();

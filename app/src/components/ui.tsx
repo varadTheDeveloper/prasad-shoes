@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -209,9 +209,10 @@ export function Button({
   );
 }
 
-export function Input({ error, highlight, style, ...p }: TextInputProps & { error?: boolean; highlight?: boolean }) {
+export function Input({ error, highlight, style, ref, ...p }: TextInputProps & { error?: boolean; highlight?: boolean; ref?: Ref<TextInput> }) {
   return (
     <TextInput
+      ref={ref}
       placeholderTextColor={C.placeholder}
       style={[s.input, highlight && { borderColor: C.highlight, backgroundColor: C.highlightTint }, error && { borderColor: C.danger }, style]}
       {...p}

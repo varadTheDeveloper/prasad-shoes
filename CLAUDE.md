@@ -90,6 +90,8 @@ Server-only changes do not need a new APK.
   A line with NO number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …") goes to Note too,
   in order, never the address – when it comes after the pincode / mobile next to a pair line, or sits between two pair
   lines; not counted in "N pairs" (it may describe the pair above).
+- Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
+  (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

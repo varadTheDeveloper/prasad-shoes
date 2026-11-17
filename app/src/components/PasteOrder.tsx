@@ -8,7 +8,7 @@
 // same message, so Prepaid and COD details never mix.
 // Warnings never block: the first Save tap shows them, the second tap ("Checked – Save") saves.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
@@ -292,6 +292,17 @@ export type PasteOrderState = ReturnType<typeof usePasteOrder>;
 export function PasteBox({ s, wide, hideType }: { s: PasteOrderState; wide?: boolean; hideType?: boolean }) {
   const has = !!(s.raw || s.form.ship_name);
   const cod = s.type === 'COD';
+  // Phone (client, 18 Nov 2026): while the message is being edited the box grows tall (most of the screen above the
+  // keyboard) and the big paste button steps aside; "Done" or tapping elsewhere shrinks it back. Website: unchanged.
+  const { height } = useWindowDimensions();
+  const [editing, setEditing] = useState(false);
+  const big = editing && !wide;
+  const box = useRef<TextInput>(null);
+  const done = () => {
+    box.current?.blur();
+    Keyboard.dismiss();
+    setEditing(false);
+  };
   return (
     <View>
       {FEATURES.cod && !hideType ? (
@@ -299,20 +310,32 @@ export function PasteBox({ s, wide, hideType }: { s: PasteOrderState; wide?: boo
           <TypeButtons value={s.type} onChange={s.setType} />
         </Field>
       ) : null}
-      <Pressable onPress={s.pasteFromClipboard} style={({ pressed }) => [st.pasteBig, pressed && { opacity: 0.85 }]}>
-        <Text style={st.pasteBigText}>{cod ? t('📋  Paste COD booking message') : t('📋  Paste from WhatsApp')}</Text>
-        <Text style={st.pasteBigSub}>
-          {cod ? t('Copy the COD booking message (date, weight, amount, address), then tap here') : t('Copy the customer’s address message, then tap here')}
-        </Text>
-      </Pressable>
+      {big ? null : (
+        <Pressable onPress={s.pasteFromClipboard} style={({ pressed }) => [st.pasteBig, pressed && { opacity: 0.85 }]}>
+          <Text style={st.pasteBigText}>{cod ? t('📋  Paste COD booking message') : t('📋  Paste from WhatsApp')}</Text>
+          <Text style={st.pasteBigSub}>
+            {cod ? t('Copy the COD booking message (date, weight, amount, address), then tap here') : t('Copy the customer’s address message, then tap here')}
+          </Text>
+        </Pressable>
+      )}
       {s.clipNote ? <Banner kind="info" text={s.clipNote} /> : null}
       <Field label={t('Message')}>
+        {big ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
+            <Pressable onPress={done} hitSlop={8} style={st.doneBtn} accessibilityRole="button">
+              <Text style={st.doneText}>{t('Done ✓')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <Input
+          ref={box}
           value={s.raw}
           onChangeText={s.applyPaste}
           multiline
           placeholder={t('…or paste / type the message here')}
-          style={[st.paste, wide && { minHeight: 200 }]}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+          style={[st.paste, wide && { minHeight: 200 }, big && { minHeight: Math.max(260, Math.round(height * 0.45)), maxHeight: Math.round(height * 0.6), fontSize: 17, lineHeight: 25 }]}
           autoCorrect={false}
           autoCapitalize="none"
         />
@@ -439,6 +462,8 @@ const st = StyleSheet.create({
   pasteBig: { backgroundColor: C.action, borderRadius: R.card, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', marginBottom: 12 },
   pasteBigText: { color: C.onAction, fontSize: 20, fontWeight: '800' },
   pasteBigSub: { color: C.onActionSub, fontSize: 13, marginTop: 4 },
+  doneBtn: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: C.action },
+  doneText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   paste: {
     minHeight: 90,
     maxHeight: 360,

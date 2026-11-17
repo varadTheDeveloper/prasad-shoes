@@ -273,6 +273,7 @@ const MR: Record<string, string> = {
   'Paid orders – paste the customer’s WhatsApp address': 'पैसे भरलेल्या ऑर्डर – ग्राहकाचा WhatsApp पत्ता पेस्ट करा',
   'PREPAID orders': 'PREPAID ऑर्डर',
   'COD orders': 'COD ऑर्डर',
+  'Done ✓': 'झाले ✓',
   // ---- several pairs in one order (17 Nov 2026)
   '{n} pairs · one box, one label': '{n} जोड · एक बॉक्स, एक लेबल',
   // ---- Prepaid paste that says COD (17 Nov 2026)

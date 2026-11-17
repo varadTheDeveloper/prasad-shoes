@@ -378,7 +378,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   let note = '';
   // Every pair in the message, in order (client, 17 Nov 2026: 2 or 10 pairs go in ONE box, one label):
   // Size box = all sizes "7, 11", Note = every size line as written, joined with ", ".
-  const pairs: { size: string; text: string; price: number | null; at: number }[] = [];
+  const pairs: { size: string; text: string; price: number | null; at: number; extra?: boolean }[] = [];
 
   const lines = messageLines(text);
 
@@ -525,6 +525,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   // "9 kapsi maharaja naal" (no "Size", no price) between other size lines is a pair too (client, 18 Nov 2026);
   // on its own it could be an address ("12 Shivaji Nagar"), so it is decided after the other pairs are known.
   const maybePairs: { line: string; size: string; at: number }[] = [];
+  const keptInfo: { line: string; at: number; afterContact: boolean }[] = [];
   loose.forEach((l, i) => {
     const prod = productLine(l, looseAfterContact[i]);
     if (prod) {
@@ -550,7 +551,10 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     }
     const mp = !mobiles.length && !pin ? toAsciiDigits(l).match(PRODUCT_RE) : null;
     if (mp && Number(mp[1]) >= 1 && Number(mp[1]) <= 13) maybePairs.push({ line: l, size: mp[2] ? mp[1] : '', at: looseAt[i] });
-    if (!onlyNumbers) looseKept.push(l);
+    if (!onlyNumbers) {
+      looseKept.push(l);
+      if (!mobiles.length && !pin) keptInfo.push({ line: l, at: looseAt[i], afterContact: looseAfterContact[i] });
+    }
   });
   // A maybe-pair right before / after a pair line joins the pairs (again, for several in a row).
   const endAt = lineNo + 1; // where the COD reader's size line was
@@ -562,6 +566,21 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
         looseKept = looseKept.filter((k) => k !== m.line);
         grew = true;
       } else maybePairs.push(m);
+    }
+  }
+  // A line with no number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …", client
+  // 18 Nov 2026) belongs to the order too: Note as written, never the address. It must come after the pincode / mobile
+  // or sit between two pair lines. It is not counted as a pair (it may describe the pair above).
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const k of keptInfo) {
+      if (pairs.some((x) => x.at === k.at)) continue;
+      const near = (d: number) => pairs.some((x) => x.at === k.at + d) || (d === 1 && opts.pairAfterEnd && endAt === k.at + 1);
+      if (/\p{L}{2,}/u.test(k.line) && ((k.afterContact && (near(-1) || near(1))) || (near(-1) && near(1)))) {
+        pairs.push({ size: '', text: k.line.replace(/\s{2,}/g, ' ').trim(), price: null, at: k.at, extra: true });
+        looseKept = looseKept.filter((x) => x !== k.line);
+        grew = true;
+      }
     }
   }
   pairs.sort((a, b) => a.at - b.at);
@@ -640,7 +659,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   const codM = toAsciiDigits(text).match(/\bcod\b\s*[:\-–=.]?\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})(?![\d])/i);
   const saysCod = codM ? Number(codM[1]) : null;
 
-  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod, pairs: pairs.length };
+  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod, pairs: pairs.filter((x) => !x.extra).length };
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -87,6 +87,9 @@ Server-only changes do not need a new APK.
   contact and alone it stays address ("12 Shivaji Nagar"). Words before the COD amount ("11 3 tail Sankeshwar COD. 2798")
   are note too, except label words (Total, Amount…). A size typed by hand never prints twice: a pasted note prints alone,
   and `noteSaysSize` also accepts a note line that starts with that size ("11 3 tail…").
+  A line with NO number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …") goes to Note too,
+  in order, never the address – when it comes after the pincode / mobile next to a pair line, or sits between two pair
+  lines; not counted in "N pairs" (it may describe the pair above).
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

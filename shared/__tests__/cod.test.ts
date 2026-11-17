@@ -443,3 +443,18 @@ test('size typed by hand next to a pasted note: never printed twice', () => {
   // a different size typed is still printed
   assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '9', note: 'kapsi naal', raw_message: '' } as LabelOrder), 'PREPAID (9 no, kapsi naal)');
 });
+
+test('a line with no number between size lines ("kapsi maharaja naal") stays in Note, never the address (18 Nov 2026)', () => {
+  const msg = HEAD + 'Size 7 z patti kolhapur\nSize 8 kapsi plus naal\nkapsi maharaja naal\nSize 11 3 tail Sankeshwar COD. 2798';
+  const r = parseCodMessage(msg);
+  assert.equal(r.note, 'Size 7 z patti kolhapur, Size 8 kapsi plus naal, kapsi maharaja naal, Size 11 3 tail Sankeshwar');
+  assert.ok(!r.address.includes('maharaja'));
+  assert.equal(r.size, '7, 8, 11');
+  assert.equal(labelOrderLine({ ...r, payment_type: 'COD', raw_message: msg }), 'COD 2798 (Size 7 z patti kolhapur, Size 8 kapsi plus naal, kapsi maharaja naal, Size 11 3 tail Sankeshwar)');
+  // last line before the COD line, and on PREPAID
+  const m2 = HEAD + 'Size 8 kapsi plus naal\nmaharaja naal black\nCOD 2798';
+  assert.equal(parseCodMessage(m2).note, 'Size 8 kapsi plus naal, maharaja naal black');
+  const p = parseWhatsApp(HEAD + 'Size 8 kapsi plus naal\nmaharaja naal black');
+  assert.equal(p.note, 'Size 8 kapsi plus naal, maharaja naal black');
+  assert.ok(!p.address.includes('maharaja'));
+});

@@ -47,6 +47,21 @@ const fields = {
     .pipe(z.string().regex(/^[1-9][0-9]{5}$/, '6 digits, not starting with 0')),
   mobile1: mobile(true),
   mobile2: mobile(false),
+  // 3rd, 4th… numbers (18 Nov 2026): every 10-digit number in the box, saved as "9272741689, 9876543210".
+  mobile_more: z
+    .string()
+    .max(200)
+    .nullish()
+    .transform((v, ctx) => {
+      const parts = (v ?? '').split(/[,;/\n]+/).map((x) => x.trim()).filter(Boolean);
+      const out: string[] = [];
+      for (const x of parts) {
+        const m = normaliseMobile(x);
+        if (!m) ctx.addIssue({ code: 'custom', message: 'Each number: 10 digits, separated by commas' });
+        else if (!out.includes(m)) out.push(m);
+      }
+      return out.length ? out.join(', ') : null;
+    }),
   product_name: opt(150),
   size: opt(100), // every size of the order: "7, 8, 11" (several pairs, one box – 17 Nov 2026)
   note: opt(500),
@@ -92,7 +107,7 @@ function parseCreate(body: any) {
   return res.data;
 }
 
-const ORDER_COLS = `o.id, o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2,
+const ORDER_COLS = `o.id, o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.mobile_more,
   o.product_name, o.size, o.note, o.payment_type, o.amount, to_char(o.booking_date, 'YYYY-MM-DD') AS booking_date, o.weight,
   o.is_printed, o.printed_at, o.dup_override,
   o.created_by, cu.name AS created_by_name, o.created_at, o.updated_at, o.deleted_at`;
@@ -168,13 +183,13 @@ r.post(
       const ins = await c.query(
         `INSERT INTO orders (ship_name, address, landmark, district, state, pincode, mobile1, mobile2, product_name, size, note,
                              payment_type, amount, raw_message, msg_hash, client_request_id, dup_override, created_by,
-                             booking_date, weight)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+                             booking_date, weight, mobile_more)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
          ON CONFLICT (client_request_id) DO NOTHING
          RETURNING id`,
         [o.ship_name, o.address, o.landmark, o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note,
           o.payment_type, amount, o.raw_message, hash, o.client_request_id, Boolean(o.force && dup.rowCount), u.id,
-          o.booking_date, o.weight],
+          o.booking_date, o.weight, o.mobile_more ?? null],
       );
       if (!ins.rowCount) {
         const ex = await c.query(`SELECT id FROM orders WHERE client_request_id = $1`, [o.client_request_id]);
@@ -224,7 +239,7 @@ function listWhere(f: z.infer<typeof listQuery>, u: AuthUser) {
   if (f.type) add('o.payment_type = ?', f.type);
   if (f.q) {
     const digits = f.q.replace(/\D/g, '');
-    if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
+    if (digits.length >= 4) add(`(o.mobile1 LIKE ? OR o.mobile2 LIKE $${p.length + 1} OR o.mobile_more LIKE $${p.length + 1} OR o.pincode LIKE $${p.length + 1})`, `%${digits.slice(-10)}%`);
     else add(`(o.ship_name ILIKE ? OR o.address ILIKE $${p.length + 1})`, `%${f.q.replace(/[%_]/g, '')}%`);
   }
   return { w: where.join(' AND '), p };
@@ -255,6 +270,7 @@ const EXPORT_COLS: Column[] = [
   { head: 'Pincode', width: 10 },
   { head: 'Mobile 1', width: 13 },
   { head: 'Mobile 2', width: 13 },
+  { head: 'More mobiles', width: 16, wrap: true },
   { head: 'Product', width: 22, wrap: true },
   { head: 'Size', width: 10 },
   { head: 'Pairs', width: 7 },
@@ -274,7 +290,7 @@ async function buildExport(query: unknown, u: AuthUser) {
   const { w, p } = listWhere(f, u);
   const { rows } = await q(
     `SELECT o.id, to_char(o.created_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI am') AS date, o.ship_name, o.address, o.landmark,
-            o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.product_name, o.size, o.note, o.payment_type,
+            o.district, o.state, o.pincode, o.mobile1, o.mobile2, o.mobile_more, o.product_name, o.size, o.note, o.payment_type,
             o.amount::float8 AS amount, o.weight, to_char(o.booking_date, 'DD-MM-YYYY') AS booking_date,
             cu.name AS added_by, o.is_printed
        FROM orders o JOIN users cu ON cu.id = o.created_by WHERE ${w}
@@ -292,6 +308,7 @@ async function buildExport(query: unknown, u: AuthUser) {
     r.pincode,
     r.mobile1,
     r.mobile2,
+    r.mobile_more,
     r.product_name,
     r.size,
     pairCount(r.size) || null,
@@ -453,11 +470,11 @@ r.put(
       await c.query(
         `UPDATE orders SET ship_name=$2, address=$3, landmark=$4, district=$5, state=$6, pincode=$7, mobile1=$8, mobile2=$9,
                 product_name=$10, size=$11, note=$12, payment_type=$13, amount=$14, updated_by=$15, updated_at=now(),
-                booking_date=$16, weight=$17
+                booking_date=$16, weight=$17, mobile_more=$18
           WHERE id = $1`,
         [id, next.ship_name, next.address, next.landmark, next.district, next.state, next.pincode, next.mobile1, next.mobile2,
           next.product_name, next.size, next.note, next.payment_type, next.amount ?? null, u.id,
-          next.booking_date ?? null, next.weight ?? null],
+          next.booking_date ?? null, next.weight ?? null, next.mobile_more ?? null],
       );
       await audit(c, u.id, 'ORDER_EDIT', 'orders', id, before, next);
     });

@@ -441,3 +441,18 @@ test('10 pairs in one order: long Size and Note save, the label prints them all 
   assert.ok(html.includes('Size 10 kolhapuri kapshi 10'), 'the last pair is on the label');
   assert.equal((await call('POST', '/orders', order({ note: 'x'.repeat(501) }), owner)).status, 400);
 });
+
+test('more mobiles: saved, searchable, printed on the label; a wrong number is refused (18 Nov 2026)', { skip }, async () => {
+  const r = await call('POST', '/orders', order({ ship_name: 'Three Mobiles', mobile_more: '92727 41689, 9822000099' }), owner);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.mobile_more, '9272741689, 9822000099');
+  const s = await call('GET', '/orders?q=9822000099', undefined, owner);
+  assert.ok(s.data.orders.some((o: { id: number }) => o.id === r.data.id), 'found by the 3rd number');
+  const p = await call('POST', '/labels/print', { orderIds: [r.data.id], markPrinted: false }, owner);
+  const html = await (await fetch(`${API}${p.data.url}`)).text();
+  assert.ok(html.includes('9272741689, 9822000099'), 'all numbers on the label');
+  assert.equal((await call('POST', '/orders', order({ mobile_more: '12345' }), owner)).status, 400);
+  const e = await call('PUT', `/orders/${r.data.id}`, { mobile_more: '' }, owner);
+  assert.equal(e.status, 200);
+  assert.equal(e.data.mobile_more, null);
+});

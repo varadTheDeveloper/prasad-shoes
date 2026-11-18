@@ -20,6 +20,7 @@ export type ParsedField =
   | 'pincode'
   | 'mobile1'
   | 'mobile2'
+  | 'mobile_more'
   | 'size'
   | 'amount'
   | 'product_name'
@@ -34,6 +35,8 @@ export interface ParseResult {
   pincode: string;
   mobile1: string;
   mobile2: string;
+  /** 3rd, 4th… mobile numbers in the message, in order: "9272741689, 9876543210" (18 Nov 2026). */
+  mobile_more: string;
   size: string;
   amount: number | null;
   /** From a product line like "11 no black shahu 2999+ naal": product "black shahu", note "naal". */
@@ -368,7 +371,7 @@ function sizeAndRest(value: string): { size: string; rest: string } {
  *  so a size-less pair line just before it ("10 kapsi naal") still counts as a pair. */
 export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {}): ParseResult {
   const f: Record<Key, string> = {
-    ship_name: '', address: '', landmark: '', district: '', state: '', pincode: '', mobile1: '', mobile2: '', size: '',
+    ship_name: '', address: '', landmark: '', district: '', state: '', pincode: '', mobile1: '', mobile2: '', mobile_more: '', size: '',
   };
   let amount: number | null = null;
   const loose: string[] = []; // unlabelled content lines, in order
@@ -651,9 +654,13 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     }
   }
   if (f.mobile2 === f.mobile1) f.mobile2 = '';
+  // Every other number the customer gave (3rd, 4th…), in message order – all print on the label (18 Nov 2026).
+  const more: string[] = [];
+  for (const line of lines) for (const m of findMobiles(line)) if (m !== f.mobile1 && m !== f.mobile2 && !more.includes(m)) more.push(m);
+  f.mobile_more = more.join(', ');
   // The pincode and phones have their own fields: don't repeat them inside the address / landmark.
-  f.address = stripContactInfo(f.address, [f.pincode], [f.mobile1, f.mobile2]);
-  f.landmark = stripContactInfo(f.landmark, [f.pincode], [f.mobile1, f.mobile2]);
+  f.address = stripContactInfo(f.address, [f.pincode], [f.mobile1, f.mobile2, ...more]);
+  f.landmark = stripContactInfo(f.landmark, [f.pincode], [f.mobile1, f.mobile2, ...more]);
   // "…, Solapur, DIST: Solapur, Maharashtra - 413004": "DIST: Solapur" goes to District (it has its own
   // field and line on the label), and the "-" left behind by the pincode is dropped.
   const segs: string[] = [];

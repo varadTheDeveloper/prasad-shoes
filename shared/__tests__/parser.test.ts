@@ -343,10 +343,10 @@ test('every message in this file: no line is lost', () => {
   for (const m of all) assert.deepEqual(unused(m), [], m);
 });
 
-test('a third phone number has no field: shown as not used', () => {
-  assert.deepEqual(unused(`Name - Amit Kale\nAddress - Plot 9, Shivaji nagar, Latur\nPincode 413512\nMob 9850011223, 9850011224, 9850011225`), [
-    'Mob 9850011223, 9850011224, 9850011225',
-  ]);
+test('a third phone number goes to "More mobiles" (printed on the label), not "not used" (18 Nov 2026)', () => {
+  const text = `Name - Amit Kale\nAddress - Plot 9, Shivaji nagar, Latur\nPincode 413512\nMob 9850011223, 9850011224, 9850011225`;
+  assert.equal(parseWhatsApp(text).mobile_more, '9850011225');
+  assert.deepEqual(unused(text), []);
 });
 
 test('extra lines after Address + Landmark are kept in the address (nothing lost)', () => {

@@ -506,3 +506,26 @@ Mob. No 8378830571
   assert.ok(q.address.includes('Near Ganesh temple') || q.landmark.includes('Near Ganesh temple'));
   assert.ok(!q.address.includes('pack carefully'));
 });
+
+test('three mobiles: all kept and all printed on the label, in the order given (18 Nov 2026)', () => {
+  const msg = `vijay giri
+At. Shrisankul  apartment  3 flour flat no 7 vinayk nager lean no 2 new sangvi pimple gurav pune neer marvellous scool pincode 411061
+Mob. No 8378830571
+9881270271
+9272741689
+9 kapsi Kolhapuri naal ,COD 1799 (8 no lokare sahu awaj)`;
+  for (const r of [parseCodMessage(msg), parseWhatsApp(msg)]) {
+    assert.equal(r.mobile1, '8378830571');
+    assert.equal(r.mobile2, '9881270271');
+    assert.equal(r.mobile_more, '9272741689');
+    assert.deepEqual(findUnused(msg, r as any).filter((l) => /9272741689/.test(l)), [], 'not reported as unused');
+    const lines = toLines({ ...r, payment_type: 'COD' } as LabelOrder);
+    assert.ok(lines.includes('Mob. 8378830571, 9881270271, 9272741689'), lines.join(' | '));
+  }
+  // 4 numbers; a number written twice prints once
+  const r4 = parseWhatsApp('Ramesh\nLatur 413512\n9822000001\n9822000002\n9822000003\n9822000004 / 9822000001');
+  assert.equal(r4.mobile_more, '9822000003, 9822000004');
+  assert.ok(toLines({ ...r4, payment_type: 'PREPAID' } as LabelOrder).includes('Mob. 9822000001, 9822000002, 9822000003, 9822000004'));
+  // one or two numbers: nothing changes
+  assert.equal(parseWhatsApp('Ramesh\nLatur 413512\n9822000001').mobile_more, '');
+});

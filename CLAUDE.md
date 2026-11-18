@@ -97,6 +97,9 @@ Server-only changes do not need a new APK.
   every "8 no" inside the COD note fills Size.
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.
+- More mobiles (client, 18 Nov 2026): a 3rd, 4th… number in the message goes to "More mobiles" (`orders.mobile_more`,
+  migration 008, "9272741689, 9876543210", any 10 digits each, comma-separated) and ALL numbers print on the label in the
+  order given: "Mob. 8378830571, 9881270271, 9272741689" (`toLines`). Searchable; Excel column "More mobiles".
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
   pincode the app **asks** (Use pincode's / Keep as written) – never changes them silently.
 - Prepaid / COD picked before pasting (`orders.payment_type`, default PREPAID). **Never change the Prepaid label** except on the client's request

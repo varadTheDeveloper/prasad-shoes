@@ -12,6 +12,7 @@ export interface LabelOrder {
   pincode: string;
   mobile1: string;
   mobile2?: string | null;
+  mobile_more?: string | null;
   product_name?: string | null;
   size?: string | null;
   note?: string | null;
@@ -113,7 +114,8 @@ export function orderLine(o: LabelOrder): string {
  */
 export function toLines(o: LabelOrder): string[] {
   const pins = [o.pincode];
-  const mobs = [o.mobile1, o.mobile2];
+  // every number the customer gave, in order (3rd, 4th… from "More mobiles", 18 Nov 2026)
+  const mobs = [o.mobile1, o.mobile2, ...(o.mobile_more ?? '').split(',').map((x) => x.trim())];
   const address = stripContactInfo(o.address ?? '', pins, mobs)
     .split('\n')
     .map((l) => l.trim())

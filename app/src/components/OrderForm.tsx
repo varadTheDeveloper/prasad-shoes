@@ -19,6 +19,8 @@ export interface FormState {
   pincode: string;
   mobile1: string;
   mobile2: string;
+  /** 3rd, 4th… numbers, comma-separated (18 Nov 2026) */
+  mobile_more: string;
   product_name: string;
   size: string;
   note: string;
@@ -41,6 +43,7 @@ export const emptyForm = (type: PaymentType = DEFAULT_PAYMENT): FormState => ({
   pincode: '',
   mobile1: '',
   mobile2: '',
+  mobile_more: '',
   product_name: '',
   size: '',
   note: '',
@@ -68,6 +71,7 @@ export function formFromOrder(o: Order): FormState {
     pincode: o.pincode,
     mobile1: o.mobile1,
     mobile2: o.mobile2 ?? '',
+    mobile_more: o.mobile_more ?? '',
     product_name: o.product_name ?? '',
     size: o.size ?? '',
     note: o.note ?? '',
@@ -95,6 +99,7 @@ export function toInput(f: FormState, showAmount: boolean): OrderInput {
     pincode: f.pincode.replace(/\s/g, ''),
     mobile1: f.mobile1,
     mobile2: n(f.mobile2),
+    mobile_more: n(f.mobile_more),
     product_name: n(f.product_name),
     size: n(f.size),
     note: n(f.note),
@@ -117,6 +122,7 @@ export function formToLabel(f: FormState): LabelOrder {
     pincode: f.pincode.replace(/\s/g, ''),
     mobile1: normaliseMobile(f.mobile1) || f.mobile1.trim(),
     mobile2: f.mobile2.trim() ? normaliseMobile(f.mobile2) || f.mobile2.trim() : null,
+    mobile_more: n(f.mobile_more),
     product_name: n(f.product_name),
     size: n(f.size),
     note: n(f.note),
@@ -138,6 +144,10 @@ export function validate(f: FormState, showAmount: boolean): Record<string, stri
     const m2 = f.mobile2.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
     if (!/^\d{10}$/.test(m2)) e.mobile2 = t('Enter 10 digits');
     else if (m2 === m1) e.mobile2 = t('Same as Mobile 1 – leave empty or enter another number');
+  }
+  if (f.mobile_more.trim()) {
+    const bad = f.mobile_more.split(/[,;/\n]+/).map((x) => x.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '')).filter(Boolean).some((x) => !/^\d{10}$/.test(x));
+    if (bad) e.mobile_more = t('Each number: 10 digits, separated by commas');
   }
   const amt = f.amount.replace(/[,₹\s]/g, '');
   // Amount is optional. It is required only for COD, and COD is switched off for now (shared/features.ts).
@@ -264,6 +274,9 @@ export function OrderForm({
           {input('note', { placeholder: t('e.g. RED') })}
         </Field>
       </Row>
+      <Field label={t('More mobiles (optional)')} error={errors.mobile_more}>
+        {input('mobile_more', { keyboardType: 'phone-pad', placeholder: t('3rd number and more, separated by commas') })}
+      </Field>
       {f.payment_type !== 'COD' ? (
         // Prepaid labels print "Weight : …    Date : …" too (header line 3); both optional.
         <Row>

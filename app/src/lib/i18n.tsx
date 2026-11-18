@@ -273,6 +273,10 @@ const MR: Record<string, string> = {
   'Paid orders – paste the customer’s WhatsApp address': 'पैसे भरलेल्या ऑर्डर – ग्राहकाचा WhatsApp पत्ता पेस्ट करा',
   'PREPAID orders': 'PREPAID ऑर्डर',
   'COD orders': 'COD ऑर्डर',
+  // ---- more mobile numbers (18 Nov 2026)
+  'More mobiles (optional)': 'आणखी मोबाइल (ऐच्छिक)',
+  '3rd number and more, separated by commas': '3रा व पुढील नंबर, स्वल्पविरामाने वेगळे',
+  'Each number: 10 digits, separated by commas': 'प्रत्येक नंबर: 10 अंक, स्वल्पविरामाने वेगळे',
   'Done ✓': 'झाले ✓',
   // ---- several pairs in one order (17 Nov 2026)
   '{n} pairs · one box, one label': '{n} जोड · एक बॉक्स, एक लेबल',

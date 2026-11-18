@@ -27,7 +27,7 @@ import { C, R } from '@/lib/theme';
 import type { DuplicateMatch, Order, PaymentType } from '@shared/types';
 import { t } from '@/lib/i18n';
 
-const PARSED_KEYS = ['ship_name', 'address', 'landmark', 'district', 'state', 'pincode', 'mobile1', 'mobile2', 'size'] as const;
+const PARSED_KEYS = ['ship_name', 'address', 'landmark', 'district', 'state', 'pincode', 'mobile1', 'mobile2', 'mobile_more', 'size'] as const;
 
 /** What the "N fields auto-filled" chip and the highlights need from either reader. */
 interface Parsed {

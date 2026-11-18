@@ -21,6 +21,8 @@ export interface Order {
   pincode: string;
   mobile1: string;
   mobile2: string | null;
+  /** 3rd, 4th… numbers as given: "9272741689, 9876543210" (18 Nov 2026) */
+  mobile_more?: string | null;
   product_name: string | null;
   size: string | null;
   note: string | null;
@@ -49,6 +51,7 @@ export interface OrderInput {
   pincode: string;
   mobile1: string;
   mobile2?: string | null;
+  mobile_more?: string | null;
   product_name?: string | null;
   size?: string | null;
   note?: string | null;

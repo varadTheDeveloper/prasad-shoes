@@ -548,3 +548,22 @@ COD 1799 (8 no lokare sahu awaj)`;
   assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 1799, size: '8 9', note: '9 kapsi naal, 8 no lokare' } as LabelOrder), 'COD 1799 (9 kapsi naal, 8 no lokare)');
   assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '8 9', note: '9 kapsi naal, 8 no lokare' } as LabelOrder), 'PREPAID (9 kapsi naal, 8 no lokare)');
 });
+
+test('client 18 Nov 2026: "DIST RAICHUR KARNATAKA 584170" -> District, State and Pincode each in their own box', () => {
+  const msg = 'Veeresh\nAddress Type 7 h no 217 RTPS COLONY SHAKTINAGAR TQ RAICHUR\nDIST RAICHUR KARNATAKA 584170\n+91 88676 26576\n\nCOD 1799 ( 10 no lokare shahu awaj )';
+  const r = parseCodMessage(msg);
+  assert.equal(r.pincode, '584170');
+  assert.equal(r.district, 'RAICHUR');
+  assert.equal(r.state, 'Karnataka');
+  assert.equal(r.address, 'Type 7 h no 217 RTPS COLONY SHAKTINAGAR TQ RAICHUR');
+  assert.equal(r.mobile1, '8867626576');
+  assert.equal(r.amount, 1799);
+  assert.equal(r.note, '10 no lokare shahu awaj');
+  assert.deepEqual(r.missing, []);
+  assert.deepEqual(findUnused(msg, r as any), []);
+  // also "Dist: Pune 411061" and "State Maharashtra - 411061"
+  const b = parseWhatsApp('Ravi Patil\nFlat 4, Shivaji Road\nDist: Pune 411061\n9876543210');
+  assert.equal(b.pincode, '411061'); assert.equal(b.district, 'Pune');
+  const c = parseWhatsApp('Ravi Patil\nFlat 4, Shivaji Road\nState Maharashtra - 411061\n9876543210');
+  assert.equal(c.pincode, '411061'); assert.equal(c.state, 'Maharashtra');
+});

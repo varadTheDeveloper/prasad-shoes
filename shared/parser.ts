@@ -678,6 +678,27 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     if (c) segs.push(c);
   }
   f.address = segs.join(', ');
+  // "DIST RAICHUR KARNATAKA 584170" (client, 18 Nov 2026): the District / State line may also carry the pincode
+  // and the state. The 6 digits go to Pincode, a state name at the end goes to State, District keeps the rest.
+  for (const k of ['district', 'state'] as const) {
+    if (!f[k]) continue;
+    const pin = findPincode(f[k]);
+    if (pin) {
+      if (!f.pincode) f.pincode = pin;
+      f[k] = stripContactInfo(f[k], [pin], []).replace(/[\s,\-–—:/.]+$/, '').trim();
+    }
+  }
+  if (f.district) {
+    const w = f.district.split(/[\s,]+/).filter(Boolean);
+    for (let n = Math.min(4, w.length - 1); n >= 1; n--) {
+      const st = stateLine(w.slice(-n).join(' '));
+      if (st) {
+        if (!f.state) f.state = st;
+        f.district = w.slice(0, -n).join(' ').replace(/[\s,\-–—:/.]+$/, '');
+        break;
+      }
+    }
+  }
 
   const filled = (Object.keys(f) as Key[]).filter((k) => f[k]) as ParsedField[];
   if (amount !== null) filled.push('amount');

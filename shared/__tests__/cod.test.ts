@@ -582,3 +582,17 @@ test('client 18 Nov 2026: ":=" labels, "(400099)" in the address, "maharashtra (
   assert.equal((lines.match(/pin\s*code/gi) ?? []).length, 1, lines);
   assert.ok(!/\(\s*\)/.test(lines), lines);
 });
+
+test('client 18 Nov 2026: every way of writing the mark after a label (":-", ";=", "=>", ":_" …) is read the same', () => {
+  for (const s of [':-', ' :- ', ';-', ':=', ';=', '=>', '::', ':--', '-:', '- ', '.:-', ' : - ', ';', ':–', ':_', '=']) {
+    const m = `Name${s} Saurabh santosh devrukhkar\nAddress${s} vile Parle shree ram nagar western express Highway vile Parle East\nLandmark${s} flora marbal\nState${s} maharashtra\nPincode${s} 400099\nPhone number${s} 7448210573\nSize 8 Ringa COD 1199`;
+    const r = parseCodMessage(m);
+    assert.equal(r.ship_name, 'Saurabh santosh devrukhkar', s);
+    assert.equal(r.address, 'vile Parle shree ram nagar western express Highway vile Parle East', s);
+    assert.equal(r.landmark, 'flora marbal', s);
+    assert.equal(r.state.toLowerCase(), 'maharashtra', s);
+    assert.equal(r.pincode, '400099', s);
+    assert.equal(r.mobile1, '7448210573', s);
+    assert.deepEqual(findUnused(m, r as any), [], s);
+  }
+});

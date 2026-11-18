@@ -59,7 +59,7 @@ type Key = Exclude<ParsedField, 'amount' | 'product_name' | 'note'>;
 // Label dictionary. Order matters: more specific labels first (Mobile 2 before Mobile 1).
 // A label must be followed by the end of line or a separator / space.
 // ---------------------------------------------------------------------------------------------
-const END = '(?=$|[\\s:;：\\-–—.=,)>])';
+const END = '(?=$|[\\s:;：_\\-–—.=,)>])';
 const LABELS: { key: Key; re: RegExp }[] = [
   { key: 'mobile2', re: new RegExp(`^(?:alt(?:ernate)?\\.?\\s*(?:mob(?:ile)?|ph(?:one)?|no|number|contact)?|(?:mob(?:ile)?|mo|ph(?:one)?|contact|whats\\s?app|मोबाईल|मोबाइल|फोन)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*[-:]?\\s*(?:2|२|ii|two)|(?:second|दुसरा)\\s*(?:mob(?:ile)?|no|number|नंबर)?)${END}`, 'i') },
   { key: 'mobile1', re: new RegExp(`^(?:(?:mob(?:ile)?|mo|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*(?:[-:]?\\s*(?:1|१|i|one)(?![0-9]))?)${END}`, 'i') },
@@ -129,7 +129,7 @@ function fuzzyLabel(raw: string): { key: Key; rest: string } | null {
   if (!best) return null;
   // The label must be followed by a separator, a space or the end of the line.
   const after = raw.slice(best.used);
-  if (after && !/^[\s:;：\-–—.=,]/.test(after)) return null;
+  if (after && !/^[\s:;：_\-–—.=,]/.test(after)) return null;
   let key = best.key;
   let rest = after;
   if (key === 'mobile1') {
@@ -225,7 +225,7 @@ const HINT = /\(\s*near\s*by\s*school\s*[,/]?\s*road\s*[,/]?\s*chowk\s*\)/gi;
 function cleanValue(v: string): string {
   return v
     .replace(HINT, '')
-    .replace(/^[\s:;：\-–—.=,>]+/, '')
+    .replace(/^[\s:;：_\-–—.=,>]+/, '')
     .replace(/[\s,]+$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim();

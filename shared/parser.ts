@@ -688,6 +688,18 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
       f[k] = stripContactInfo(f[k], [pin], []).replace(/[\s,\-–—:/.]+$/, '').trim();
     }
   }
+  // "State := maharashtra ( Mumbai )" (client, 18 Nov 2026): State = Maharashtra; the city in brackets is kept at
+  // the end of the address (never lost), unless the address already names it.
+  {
+    const sb = f.state.match(/^(.*?)\s*[(\[]\s*([^()\[\]]*?)\s*[)\]]\s*$/);
+    const st = sb ? stateLine(sb[1]) : '';
+    if (sb && st) {
+      f.state = st;
+      const city = sb[2].trim();
+      if (city && !stateLine(city) && !new RegExp(`\\b${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(`${f.address} ${f.landmark} ${f.district}`))
+        f.address = f.address ? `${f.address}, ${city}` : city;
+    }
+  }
   if (f.district) {
     const w = f.district.split(/[\s,]+/).filter(Boolean);
     for (let n = Math.min(4, w.length - 1); n >= 1; n--) {
@@ -796,6 +808,7 @@ export function stripContactInfo(text: string, pincodes: (string | null | undefi
     .split('\n')
     .map((l) =>
       l
+        .replace(/[(\[]\s*[)\]]/g, ' ') // "vile Parle East (400099)" -> no empty "( )" left behind
         .replace(/\s+([,.])/g, '$1')
         .replace(/([,.]\s*){2,}/g, ', ')
         .replace(/\s{2,}/g, ' ')

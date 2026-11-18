@@ -567,3 +567,18 @@ test('client 18 Nov 2026: "DIST RAICHUR KARNATAKA 584170" -> District, State and
   const c = parseWhatsApp('Ravi Patil\nFlat 4, Shivaji Road\nState Maharashtra - 411061\n9876543210');
   assert.equal(c.pincode, '411061'); assert.equal(c.state, 'Maharashtra');
 });
+
+test('client 18 Nov 2026: ":=" labels, "(400099)" in the address, "maharashtra ( Mumbai )" – Pincode prints once, no empty ( )', () => {
+  const msg = 'Name :=. Saurabh santosh devrukhkar\nAddress:= vile Parle shree ram nagar western  express Highway vile Parle East (400099)\nLedmark:=  flora marbal\nState := maharashtra ( Mumbai )\nPincode:= 400099\nPhone number := 7448210573\n9361956859\nSize 8 Ringa COD 1199';
+  const r = parseCodMessage(msg);
+  assert.equal(r.address, 'vile Parle shree ram nagar western express Highway vile Parle East, Mumbai');
+  assert.equal(r.state, 'Maharashtra');
+  assert.equal(r.pincode, '400099');
+  assert.equal(r.landmark, 'flora marbal');
+  assert.equal(r.mobile1, '7448210573'); assert.equal(r.mobile2, '9361956859');
+  assert.equal(r.size, '8'); assert.equal(r.amount, 1199); assert.equal(r.note, 'Size 8 Ringa');
+  assert.deepEqual(findUnused(msg, r as any), []);
+  const lines = toLines({ ...r, district: 'Mumbai Suburban', payment_type: 'COD' } as any).join('\n');
+  assert.equal((lines.match(/pin\s*code/gi) ?? []).length, 1, lines);
+  assert.ok(!/\(\s*\)/.test(lines), lines);
+});

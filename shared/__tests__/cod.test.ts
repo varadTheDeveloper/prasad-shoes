@@ -529,3 +529,22 @@ Mob. No 8378830571
   // one or two numbers: nothing changes
   assert.equal(parseWhatsApp('Ramesh\nLatur 413512\n9822000001').mobile_more, '');
 });
+
+test('size typed by hand ("8 9") with a pasted note made of 2 lines: the sizes are not repeated (18 Nov 2026)', () => {
+  const msg = `vijay giri
+At. Shrisankul  apartment  3 flour flat no 7 vinayk nager lean no 2 new sangvi pimple gurav pune neer marvellous scool pincode 411061
+Mob. No 8378830571
+9881270271
+9272741689
+9 kapsi Kolhapuri naal
+COD 1799 (8 no lokare sahu awaj)`;
+  const r = parseCodMessage(msg);
+  assert.equal(r.note, '9 kapsi Kolhapuri naal, 8 no lokare sahu awaj');
+  for (const size of ['8 9', '8, 9', '8/9', '9', '8']) {
+    assert.equal(labelOrderLine({ ...r, size, payment_type: 'COD', raw_message: msg }), 'COD 1799 (9 kapsi Kolhapuri naal, 8 no lokare sahu awaj)', size);
+  }
+  // note edited by hand (no longer pasted): sizes it already says are not added again
+  const base = { ship_name: 'A', address: 'B', pincode: '411001', mobile1: '9822000001', raw_message: '' };
+  assert.equal(codOrderLine({ ...base, payment_type: 'COD', amount: 1799, size: '8 9', note: '9 kapsi naal, 8 no lokare' } as LabelOrder), 'COD 1799 (9 kapsi naal, 8 no lokare)');
+  assert.equal(orderLine({ ...base, payment_type: 'PREPAID', size: '8 9', note: '9 kapsi naal, 8 no lokare' } as LabelOrder), 'PREPAID (9 kapsi naal, 8 no lokare)');
+});

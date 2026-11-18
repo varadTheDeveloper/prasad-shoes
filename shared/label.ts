@@ -66,7 +66,8 @@ export function noteWithoutProduct(product: string | null | undefined, note: str
 /** The note already says this size as written ("SIZE- 9 CUTKAAN…", "Size-7 no sanke", "11 no black shahu"). */
 export function noteSaysSize(note: string, size: string | null | undefined): boolean {
   // Several pairs ("7, 11", 17 Nov 2026): the note says the sizes when it says every one of them.
-  const all = (size ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  // sizes typed as "7, 11", "8 9" or "8/9" (18 Nov 2026)
+  const all = (size ?? '').split(/[,\s/]+/).map((x) => x.trim()).filter(Boolean);
   if (!all.length || !note) return false;
   return all.every((z) => {
     const n = z.replace('.', '\\.');
@@ -79,7 +80,12 @@ export function noteSaysSize(note: string, size: string | null | undefined): boo
 export function noteIsPasted(o: LabelOrder): boolean {
   const flat = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   const note = flat(o.note ?? '');
-  return !!note && !!o.raw_message && ` ${flat(o.raw_message)} `.includes(` ${note} `);
+  if (!note || !o.raw_message) return false;
+  const raw = ` ${flat(o.raw_message)} `;
+  // The note joins several pasted lines with ", " ("9 kapsi Kolhapuri naal, 8 no lokare sahu awaj" – other words such
+  // as "COD 1799" sat between them in the message, 18 Nov 2026): pasted when every piece is in the message.
+  const pieces = (o.note ?? '').split(',').map(flat).filter(Boolean);
+  return raw.includes(` ${note} `) || (pieces.length > 1 && pieces.every((x) => raw.includes(` ${x} `)));
 }
 
 /** PREPAID (Kolhapuri Kurundwad, 10 no, RED, 1299) – empty parts are skipped, nothing twice. */

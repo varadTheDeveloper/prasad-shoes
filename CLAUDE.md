@@ -86,7 +86,9 @@ Server-only changes do not need a new APK.
   (no address word) or next to another pair line (or just before a last COD line with product words); before the
   contact and alone it stays address ("12 Shivaji Nagar"). Words before the COD amount ("11 3 tail Sankeshwar COD. 2798")
   are note too, except label words (Total, Amount…). A size typed by hand never prints twice: a pasted note prints alone,
-  and `noteSaysSize` also accepts a note line that starts with that size ("11 3 tail…").
+  and `noteSaysSize` also accepts a note line that starts with that size ("11 3 tail…"). A note made of several pasted lines
+  joined with ", " (other words like "COD 1799" sat between them) still counts as pasted (`noteIsPasted` checks each
+  piece); sizes typed as "8 9" / "8/9" / "8, 9" are each checked (18 Nov 2026).
   A line with NO number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …") goes to Note too,
   in order, never the address – when it comes after the pincode / mobile next to a pair line, or sits between two pair
   lines; not counted in "N pairs" (it may describe the pair above).

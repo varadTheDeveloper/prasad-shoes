@@ -471,3 +471,23 @@ test('name first stays the name; labelled messages are untouched; no COD = saysC
   check('Kiran Jadhav\nSunil Jadhav\nGanesh Peth Kolhapur 416001\n9822000001', { ship_name: 'Kiran Jadhav' });
   check('Raju\nNear bus stand, Karad\n415110\n9822000002\ncod 1499', { ship_name: 'Raju', saysCod: 1499 });
 });
+
+test('pincode written without the word "pincode": inside the address, own line, dash, stuck, spaced, Marathi digits, on the mobile line (18 Nov 2026)', () => {
+  const tail = `\nMob. No 8378830571\n9881270271\n9 kapsi Kolhapuri naal`;
+  const addr = 'vijay giri\nflat no 7 vinayk nager new sangvi pimple gurav pune neer marvellous scool';
+  for (const [how, msg] of [
+    ['in the line', addr + ' 411061' + tail],
+    ['dash', addr + ' pune-411061' + tail],
+    ['stuck to a word', addr + ' pune411061' + tail],
+    ['with a space', addr + ' pune 411 061' + tail],
+    ['own line', addr + '\n411061' + tail],
+    ['Marathi digits', addr + ' पुणे ४११०६१' + tail],
+    ['middle of the address', 'vijay giri\nflat no 7, sangvi 411061 pimple gurav pune' + tail],
+    ['on the mobile line', 'vijay giri\nflat no 7, sangvi pimple gurav pune\nMob. No 8378830571 411061\n9 kapsi naal'],
+  ]) {
+    const r = parseWhatsApp(msg);
+    assert.equal(r.pincode, '411061', how);
+    assert.ok(!/411\s?061|४११०६१/.test(r.address), `not left in the address: ${how}`);
+    assert.deepEqual(unused(msg), [], `nothing "not used": ${how}`);
+  }
+});

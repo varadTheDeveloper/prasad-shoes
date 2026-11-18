@@ -391,6 +391,9 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   const setField = (key: Key, value: string, append: boolean) => {
     if (!value) return;
     if (key === 'mobile1' || key === 'mobile2') {
+      // "Mob. No 8378830571 411061": a pincode written on the mobile line (18 Nov 2026)
+      const pp = findPincode(value);
+      if (pp && !f.pincode) f.pincode = pp;
       let ms = findMobiles(value);
       if (ms.length === 0) ms = rawNumbers(value); // wrong number: keep it, the form marks it red
       if (ms.length === 0) return;
@@ -702,7 +705,8 @@ const IGNORE_WORDS = new Set(
     'प्रति', 'नं', 'नंबर', 'क्र', 'पिन', 'कोड', 'पिनकोड', 'मोबाईल', 'मोबाइल', 'फोन', 'जिल्हा', 'जिला', 'राज्य', 'साइज', 'साईज', 'नाव', 'नाम', 'पत्ता', 'पता',
   ].map((w) => w.toLowerCase()),
 );
-const tokens = (s: string) => toAsciiDigits(s).toLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+// letters and digits apart: "pune411061" -> "pune", "411061" (a pincode stuck to a word, 18 Nov 2026)
+const tokens = (s: string) => toAsciiDigits(s).toLowerCase().match(/[\p{L}\p{M}]+|\p{N}+/gu) ?? [];
 
 export function findUnused(text: string, fields: Partial<Record<string, string | number | null | undefined>>): string[] {
   const values = Object.values(fields)

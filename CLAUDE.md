@@ -97,6 +97,9 @@ Server-only changes do not need a new APK.
   Client, 18 Nov 2026: the note always comes at the END – every unlabelled line after the LAST mobile / pincode line goes
   to Note as written, never the address (Size only when marked). "COD" right after a comma (",COD 1799") is found, and
   every "8 no" inside the COD note fills Size.
+  Pincode (18 Nov 2026): any 6 digits (not starting with 0) are the pincode even without the word "pincode" – inside the
+  address line, own line, "pune-411061", "pune411061", "411 061", Marathi digits, or on the mobile line ("Mob 83… 411061").
+  No 6 digits at all = Pincode left empty (required, staff type it).
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.
 - More mobiles (client, 18 Nov 2026): a 3rd, 4th… number in the message goes to "More mobiles" (`orders.mobile_more`,

@@ -92,6 +92,9 @@ Server-only changes do not need a new APK.
   lines; not counted in "N pairs" (it may describe the pair above).
   A full stop after the size counts ("Size : 7. Awaj…" → 7; "7.5" is still a half size). An amount line that also names the
   pair ("COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)") goes to Note as written on PREPAID too – never dropped.
+  Client, 18 Nov 2026: the note always comes at the END – every unlabelled line after the LAST mobile / pincode line goes
+  to Note as written, never the address (Size only when marked). "COD" right after a comma (",COD 1799") is found, and
+  every "8 no" inside the COD note fills Size.
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the

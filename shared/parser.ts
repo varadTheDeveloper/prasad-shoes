@@ -430,6 +430,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
 
   let lineRaw = '';
   let lineNo = -1; // position of the line in the message (pairs keep the message's order)
+  let lastContactAt = -1; // the last line with a mobile / pincode
   const looseAt: number[] = [];
   for (let raw of lines) {
     lineNo++;
@@ -446,6 +447,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     const lineHasContact = !!findPincode(raw) || findMobiles(raw).length > 0;
     const contactBefore = contactSeen;
     contactSeen ||= lineHasContact;
+    if (lineHasContact) lastContactAt = lineNo;
 
     // Amount lines: "₹1,599.00 (estimated total)", "Total 1599", "1599"
     const am = amountOf(raw, current);
@@ -574,6 +576,17 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
         looseKept = looseKept.filter((k) => k !== m.line);
         grew = true;
       } else maybePairs.push(m);
+    }
+  }
+  // Client, 18 Nov 2026: the note always comes at the END, after the mobile / pincode. Every unlabelled line after the
+  // last mobile / pincode line goes to Note as written (never the address); Size only when written as a size.
+  if (lastContactAt >= 0) {
+    for (const k of keptInfo) {
+      if (k.at <= lastContactAt || pairs.some((x) => x.at === k.at) || !/\p{L}{2,}/u.test(k.line)) continue;
+      const ms = toAsciiDigits(k.line).match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)|(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i);
+      const startsWithNumber = /^\s*\d{1,2}(?:\.5)?\s+\p{L}/u.test(toAsciiDigits(k.line));
+      pairs.push({ size: ms?.[1] ?? ms?.[2] ?? '', text: k.line.replace(/\s{2,}/g, ' ').trim(), price: null, at: k.at, extra: !ms && !startsWithNumber });
+      looseKept = looseKept.filter((x) => x !== k.line);
     }
   }
   // A line with no number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …", client
@@ -810,7 +823,7 @@ const MON_DATE = '(\\d{1,2})(?:st|nd|rd|th)?[\\s\\-\\/.]*([A-Za-z]{3,9})\\.?[\\s
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const DATE_RE = new RegExp(`(?<![\\p{L}])${DATE_WORDS}\\s*[:：\\-=.]*\\s*(?:${ISO_DATE}|${NUM_DATE}|${MON_DATE})`, 'iu');
 const WEIGHT_RE = /(?<![a-z])(?:weight|wght|wgt|wt|वजन)\.?\s*[:：\-=.]*\s*(\d+(?:\.\d+)?)\s*(kgs?|kilo(?:gram)?s?|grams?|gms?|gm|g|ग्रॅम|किलो)?\.?(?![a-z])/i;
-const COD_AMOUNT_RE = /(?:^|[\s(])(?:cod|c\.o\.d\.?|cash\s*on\s*delivery)\s*(?:amount|amt|value|charges?|for\s*rupees|for\s*rs\.?)?\s*(?:rs\.?|₹|inr)?\s*[:：\-=.]*\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+const COD_AMOUNT_RE = /(?:^|[\s(,;.\-/])(?:cod|c\.o\.d\.?|cash\s*on\s*delivery)\s*(?:amount|amt|value|charges?|for\s*rupees|for\s*rs\.?)?\s*(?:rs\.?|₹|inr)?\s*[:：\-=.]*\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
 const NUMBER_WORDS =
   /^(?:rs\.?|rupees?|inr|in\s*words|amount\s*in\s*words|only|and|paise|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakh|lakhs|lac|crore|[\s,.:\-–()/])+$/i;
 const FROM_HEAD = /^(?:from|frm|sender|sender'?s?\s*(?:details?|address|name)|consignor|prashak|प्रेषक|पाठवणारा|पाठवणार|भेजने\s*वाला)\b\s*[:：,\-–—.]*\s*(.*)$/i;
@@ -970,7 +983,7 @@ export function parseCodMessage(text: string): CodParseResult {
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
   const noteSize =
     parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i)?.[1] ??
-    toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
+    [...toAsciiDigits(parts.codNote).matchAll(/(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/gi)].map((x) => x[1]).join(', '); // "10 no Lokare…", "(8 no lokare…)"
   // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
   const codIsLast = /\bcod\b/i.test(text.trimEnd().split('\n').pop() ?? '');
   const r = parseWhatsApp(parts.to, { pairAfterEnd: !!parts.codNote && codIsLast });

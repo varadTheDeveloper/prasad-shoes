@@ -483,3 +483,26 @@ COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)`;
   // size typed by hand + note "Size : 7. …" edited: not printed twice
   assert.equal(codOrderLine({ ship_name: 'A', address: 'B', pincode: '411001', mobile1: '9822000001', payment_type: 'COD', amount: 2249, size: '7', note: 'Size : 7. Awaj Shahu', raw_message: '' } as LabelOrder), 'COD 2249 (Size : 7. Awaj Shahu)');
 });
+
+test('the note at the end, after the mobiles ("9 kapsi Kolhapuri naal ,COD 1799 (8 no lokare sahu awaj)"): never the address (18 Nov 2026)', () => {
+  const msg = `vijay giri
+At. Shrisankul  apartment  3 flour flat no 7 vinayk nager lean no 2 new sangvi pimple gurav pune neer marvellous scool pincode 411061
+Mob. No 8378830571
+9881270271
+9272741689
+9 kapsi Kolhapuri naal ,COD 1799 (8 no lokare sahu awaj)`;
+  const r = parseCodMessage(msg);
+  assert.equal(r.amount, 1799); // ",COD" (comma right before) is found
+  assert.equal(r.address, 'At. Shrisankul apartment 3 flour flat no 7 vinayk nager lean no 2 new sangvi pimple gurav pune neer marvellous scool');
+  assert.equal(r.size, '8'); // "8 no" inside the brackets
+  assert.equal(labelOrderLine({ ...r, payment_type: 'COD', raw_message: msg }), 'COD 1799 (9 kapsi Kolhapuri naal 8 no lokare sahu awaj)');
+  const p = parseWhatsApp(msg);
+  assert.ok(!p.address.includes('kapsi'));
+  assert.equal(p.note, '9 kapsi Kolhapuri naal ,COD 1799 (8 no lokare sahu awaj)');
+  assert.equal(p.saysCod, 1799);
+  // any wording after the last mobile goes to Note; lines before it are still address
+  const q = parseWhatsApp('Sunil More\nPlot 5, Station Road\nNear Ganesh temple\nLatur 413512\n9822012345\nred colour, pack carefully');
+  assert.equal(q.note, 'red colour, pack carefully');
+  assert.ok(q.address.includes('Near Ganesh temple') || q.landmark.includes('Near Ganesh temple'));
+  assert.ok(!q.address.includes('pack carefully'));
+});

@@ -70,7 +70,7 @@ export function noteSaysSize(note: string, size: string | null | undefined): boo
   return all.every((z) => {
     const n = z.replace('.', '\\.');
     // also a pair line that starts with the size ("11 3 tail Sankeshwar" with Size 11 typed by hand, 18 Nov 2026)
-    return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?![\\d.])|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)|(?:^|,)\\s*${n}(?![\\d.])\\s`, 'iu').test(note);
+    return new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*${n}(?!\\d|\\.\\d)|(?<![\\d.])${n}\\s*(?:no\\b|number\\b|नंबर|नं)|(?:^|,)\\s*${n}(?!\\d|\\.\\d)\\s`, 'iu').test(note);
   });
 }
 

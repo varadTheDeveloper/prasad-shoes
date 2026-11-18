@@ -144,18 +144,25 @@ r.post(
       const { rows } = await q(`SELECT id FROM users WHERE mobile = $1 AND role = 'ADMIN' AND is_active`, [mobile]);
       if (!rows[0]) return;
       const userId = rows[0].id as number;
-      const recent = await q(
-        `SELECT count(*)::int AS n FROM password_resets
-          WHERE user_id = $1 AND used_at IS NULL AND created_at > now() - make_interval(mins => $2)`,
-        [userId, RESET_MINUTES],
-      );
-      if (recent.rows[0].n >= RESET_LINKS_AT_ONCE) return; // someone is pressing it again and again: no more emails
+      // Count + save in one transaction, one request at a time per owner (a lock), so quick repeated taps cannot all
+      // pass the "3 links" check before any is saved (found in testing, 18 Nov 2026).
       const key = randomBytes(32).toString('base64url');
-      await q(`INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`, [
-        userId,
-        sha256(key),
-        RESET_MINUTES,
-      ]);
+      const allowed = await tx(async (c) => {
+        await c.query(`SELECT pg_advisory_xact_lock(hashtext('password_reset'), $1)`, [userId]);
+        const recent = await c.query(
+          `SELECT count(*)::int AS n FROM password_resets
+            WHERE user_id = $1 AND used_at IS NULL AND created_at > now() - make_interval(mins => $2)`,
+          [userId, RESET_MINUTES],
+        );
+        if (recent.rows[0].n >= RESET_LINKS_AT_ONCE) return false; // pressed again and again: no more emails
+        await c.query(`INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`, [
+          userId,
+          sha256(key),
+          RESET_MINUTES,
+        ]);
+        return true;
+      });
+      if (!allowed) return;
       // The key goes after '#': browsers never send that part to the server, so it never lands in server logs.
       const link = `${env.publicUrl}/reset-password#key=${key}`;
       await sendToOwner({

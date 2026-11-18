@@ -458,3 +458,28 @@ test('a line with no number between size lines ("kapsi maharaja naal") stays in 
   assert.equal(p.note, 'Size 8 kapsi plus naal, maharaja naal black');
   assert.ok(!p.address.includes('maharaja'));
 });
+
+test('"(Size : 7. Awaj Shahu Kolhapuri)" – full stop after the size: Size 7 on both screens, line kept (18 Nov 2026)', () => {
+  const msg = `Naam : Laxman Mallinath Wachche
+Address: Manyata Tech Park N1 Building TCFM Nagavara
+Landmark : Manyata Tech Park N1 Building TCFM Nagavara 560045
+State: Karnataka
+Pincode - 560045
+Mobile No: 7770036704
+
+COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)`;
+  const r = parseCodMessage(msg);
+  assert.equal(r.size, '7');
+  assert.equal(r.amount, 2249);
+  assert.equal(labelOrderLine({ ...r, payment_type: 'COD', raw_message: msg }), 'COD 2249 (Size : 7. Awaj Shahu Kolhapuri)');
+  const p = parseWhatsApp(msg); // pasted on PREPAID: the line is not lost, and the screen asks "is this COD?"
+  assert.equal(p.size, '7');
+  assert.equal(p.note, 'COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)');
+  assert.equal(p.saysCod, 2249);
+  // half sizes still work; a plain total line adds nothing to the note
+  assert.equal(parseCodMessage('Ramesh\nLatur 413512\n9850011223\nCOD 1499 Size 7.5 kapsi').size, '7.5');
+  assert.equal(parseWhatsApp('Ramesh\nLatur 413512\n9850011223\nSize 8 red\nTotal 1599').note, 'Size 8 red');
+  assert.equal(parseWhatsApp('Ramesh\nLatur 413512\n9850011223\nSize 8 red\n₹1,599.00 (estimated total)').note, 'Size 8 red');
+  // size typed by hand + note "Size : 7. …" edited: not printed twice
+  assert.equal(codOrderLine({ ship_name: 'A', address: 'B', pincode: '411001', mobile1: '9822000001', payment_type: 'COD', amount: 2249, size: '7', note: 'Size : 7. Awaj Shahu', raw_message: '' } as LabelOrder), 'COD 2249 (Size : 7. Awaj Shahu)');
+});

@@ -356,7 +356,7 @@ function productLine(line: string, afterContact: boolean): { size: string; produ
  *  "UK 8" -> "8"; "medium" -> size "" (not a shoe size number), rest "medium". */
 function sizeAndRest(value: string): { size: string; rest: string } {
   const v = toAsciiDigits(value).replace(/^[\s:：\-–—.=,>]+/, '').trim();
-  const m = v.match(/^(?:(?:uk|ind|india)\s*)?(\d{1,2}(?:\.5)?)(?![\d.])\s*(?:no\b\.?|number\b|नंबर|नं\.?)?\s*[,\-–:]?\s*(.*)$/i);
+  const m = v.match(/^(?:(?:uk|ind|india)\s*)?(\d{1,2}(?:\.5)?)(?!\d|\.\d)\s*(?:no\b\.?|number\b|नंबर|नं\.?)?\s*[,\-–:]?\s*(.*)$/i);
   if (m) return { size: m[1], rest: m[2].trim() };
   return { size: '', rest: v };
 }
@@ -451,6 +451,14 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     const am = amountOf(raw, current);
     if (am) {
       if (amount === null) amount = am.amount;
+      // "COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)": the amount line also names the pair -> keep the whole line in
+      // Note as written (client, 18 Nov 2026: never lose a line); Size only when written as a size.
+      const words = toAsciiDigits(raw)
+        .replace(/\b(?:estimated|grand|sub)?\s*total\b|\b(?:amount|amt|cod|c\.o\.d|rs|rupees?|inr|price|payable|pay|paid|prepaid|charges?|cash|on|delivery|for|only|value|of)\b|[₹\d.,:\-\/()+=]/gi, ' ');
+      if (/\p{L}{3,}/u.test(words) && !NUMBER_WORDS.test(words.trim())) {
+        const ms = raw.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i);
+        pairs.push({ size: ms?.[1] ?? '', text: raw.replace(/\s{2,}/g, ' ').trim(), price: null, at: lineNo });
+      }
       continue;
     }
 
@@ -961,7 +969,7 @@ export function parseCodMessage(text: string): CodParseResult {
   const parts = splitCod(text);
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
   const noteSize =
-    parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?![\d.])/i)?.[1] ??
+    parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i)?.[1] ??
     toAsciiDigits(parts.codNote).match(/^(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i)?.[1] ?? ''; // "10 no Lokare…"
   // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
   const codIsLast = /\bcod\b/i.test(text.trimEnd().split('\n').pop() ?? '');

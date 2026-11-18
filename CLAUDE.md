@@ -90,6 +90,8 @@ Server-only changes do not need a new APK.
   A line with NO number among the pair lines ("kapsi maharaja naal" between "Size 8 …" and "Size 11 …") goes to Note too,
   in order, never the address – when it comes after the pincode / mobile next to a pair line, or sits between two pair
   lines; not counted in "N pairs" (it may describe the pair above).
+  A full stop after the size counts ("Size : 7. Awaj…" → 7; "7.5" is still a half size). An amount line that also names the
+  pair ("COD 2249/- (Size : 7. Awaj Shahu Kolhapuri)") goes to Note as written on PREPAID too – never dropped.
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.
 - Mobile: any 10 digits. District / State: filled from the pincode when empty; when they don't match the
@@ -124,7 +126,7 @@ Server-only changes do not need a new APK.
   Password change (answers a fresh token for this device), owner's staff reset, email reset and `npm run seed` raise token_version →
   all older logins end. `POST /api/auth/logout` ends only that device (`revoked_tokens`). Owner only: `POST /api/auth/forgot {mobile}`
   always answers the same message; for an active ADMIN it emails a one-time link `PUBLIC_URL/reset-password#key=…` (key after `#`: never sent to / logged by the server; 15 min,
-  max 3 unused links per 15 min, only the key's SHA-256 is stored) to `OWNER_EMAIL` via Resend. `PUBLIC_URL` comes only from
+  max 3 unused links per 15 min – counted and saved under a per-owner lock so quick repeated taps can't pass it; only the key's SHA-256 is stored) to `OWNER_EMAIL` via Resend. `PUBLIC_URL` comes only from
   server/.env (never from the Host header). Reset page: `app/reset-password.tsx` (works logged in or out). Staff ask the owner.
   Every owner password change (reset link or Change password) emails "the owner password was changed" to OWNER_EMAIL.
   Website security headers + CSP: `deploy/nginx-headers.conf` → /etc/nginx/snippets/prasad-shoes-headers.conf, included in the

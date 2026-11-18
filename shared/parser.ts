@@ -59,7 +59,7 @@ type Key = Exclude<ParsedField, 'amount' | 'product_name' | 'note'>;
 // Label dictionary. Order matters: more specific labels first (Mobile 2 before Mobile 1).
 // A label must be followed by the end of line or a separator / space.
 // ---------------------------------------------------------------------------------------------
-const END = '(?=$|[\\s:：\\-–—.=,)>])';
+const END = '(?=$|[\\s:;：\\-–—.=,)>])';
 const LABELS: { key: Key; re: RegExp }[] = [
   { key: 'mobile2', re: new RegExp(`^(?:alt(?:ernate)?\\.?\\s*(?:mob(?:ile)?|ph(?:one)?|no|number|contact)?|(?:mob(?:ile)?|mo|ph(?:one)?|contact|whats\\s?app|मोबाईल|मोबाइल|फोन)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*[-:]?\\s*(?:2|२|ii|two)|(?:second|दुसरा)\\s*(?:mob(?:ile)?|no|number|नंबर)?)${END}`, 'i') },
   { key: 'mobile1', re: new RegExp(`^(?:(?:mob(?:ile)?|mo|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर|क्र)?\\.?\\s*(?:[-:]?\\s*(?:1|१|i|one)(?![0-9]))?)${END}`, 'i') },
@@ -129,7 +129,7 @@ function fuzzyLabel(raw: string): { key: Key; rest: string } | null {
   if (!best) return null;
   // The label must be followed by a separator, a space or the end of the line.
   const after = raw.slice(best.used);
-  if (after && !/^[\s:：\-–—.=,]/.test(after)) return null;
+  if (after && !/^[\s:;：\-–—.=,]/.test(after)) return null;
   let key = best.key;
   let rest = after;
   if (key === 'mobile1') {
@@ -225,7 +225,7 @@ const HINT = /\(\s*near\s*by\s*school\s*[,/]?\s*road\s*[,/]?\s*chowk\s*\)/gi;
 function cleanValue(v: string): string {
   return v
     .replace(HINT, '')
-    .replace(/^[\s:：\-–—.=,>]+/, '')
+    .replace(/^[\s:;：\-–—.=,>]+/, '')
     .replace(/[\s,]+$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -340,7 +340,7 @@ function labelOfExact(raw: string): { key: Key; rest: string } | null {
 // after the pincode / mobile, be 1–13 and have no address word. Client, 18 Nov 2026: the Size box is filled ONLY when
 // the size is clearly marked ("Size 11", "11 no", "11 number"); otherwise the line goes to Note as written, Size empty.
 // ---------------------------------------------------------------------------------------------
-const PRODUCT_LABEL = /^(?:product|products|product\s*name|item|item\s*name|प्रोडक्ट|उत्पादन)\s*[:：\-–—=.]\s*(.+)$/i;
+const PRODUCT_LABEL = /^(?:product|products|product\s*name|item|item\s*name|प्रोडक्ट|उत्पादन)\s*[:;：\-–—=.]\s*(.+)$/i;
 const PRODUCT_RE = /^(\d{1,2}(?:\.5)?)\s*(no\.?|number|नंबर|नं\.?)?\s+(.*\p{L}.*)$/iu;
 const PRODUCT_AMOUNT = /(?:₹|rs\.?\s*)?(?<![\d.])(\d{3,5}|\d{1,2},\d{3})(?![\d.])\s*(?:\/-|\+|rs\.?|₹)?/i;
 function productLine(line: string, afterContact: boolean): { size: string; product: string; note: string; amount: number | null } | null {
@@ -358,7 +358,7 @@ function productLine(line: string, afterContact: boolean): { size: string; produ
 /** "12 antique Hankare kapshi 1799+ naal" -> size "12", rest "antique Hankare kapshi 1799+ naal"; "9 no" -> "9", "";
  *  "UK 8" -> "8"; "medium" -> size "" (not a shoe size number), rest "medium". */
 function sizeAndRest(value: string): { size: string; rest: string } {
-  const v = toAsciiDigits(value).replace(/^[\s:：\-–—.=,>]+/, '').trim();
+  const v = toAsciiDigits(value).replace(/^[\s:;：\-–—.=,>]+/, '').trim();
   const m = v.match(/^(?:(?:uk|ind|india)\s*)?(\d{1,2}(?:\.5)?)(?!\d|\.\d)\s*(?:no\b\.?|number\b|नंबर|नं\.?)?\s*[,\-–:]?\s*(.*)$/i);
   if (m) return { size: m[1], rest: m[2].trim() };
   return { size: '', rest: v };
@@ -786,9 +786,9 @@ export function findUnused(text: string, fields: Partial<Record<string, string |
 // Remove a known pincode / mobile number (and the words "Pin code", "पिन कोड", "Mob", "+91" in
 // front of it) from free text, so the address does not repeat what is printed on its own line.
 // ---------------------------------------------------------------------------------------------
-const PIN_WORDS = '(?:(?:pin\\s*-?\\s*code|pincode|pin\\s*no|pin|postal\\s*code|पिन\\s*कोड|पिनकोड|पिन)\\s*[:：\\-.=]?\\s*)?';
+const PIN_WORDS = '(?:(?:pin\\s*-?\\s*code|pincode|pin\\s*no|pin|postal\\s*code|पिन\\s*कोड|पिनकोड|पिन)\\s*[:;：\\-.=]?\\s*)?';
 const MOB_WORDS =
-  '(?:(?:mob(?:ile)?|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर)?\\.?\\s*(?:[12](?![0-9]))?\\s*[:：\\-.=]?\\s*)?';
+  '(?:(?:mob(?:ile)?|ph(?:one)?|cell|contact|whats\\s?app|मोबाईल|मोबाइल|फोन|संपर्क)\\.?\\s*(?:no|num|number|नं|नंबर)?\\.?\\s*(?:[12](?![0-9]))?\\s*[:;：\\-.=]?\\s*)?';
 const spaced = (digits: string) => digits.split('').join('[\\s-]?');
 
 export function stripContactInfo(text: string, pincodes: (string | null | undefined)[], mobiles: (string | null | undefined)[]): string {
@@ -866,9 +866,9 @@ const NUM_DATE = '(\\d{1,2})\\s*[\\/.\\-]\\s*(\\d{1,2})(?:\\s*[\\/.\\-]\\s*(\\d{
 const ISO_DATE = '(\\d{4})-(\\d{1,2})-(\\d{1,2})';
 const MON_DATE = '(\\d{1,2})(?:st|nd|rd|th)?[\\s\\-\\/.]*([A-Za-z]{3,9})\\.?[\\s\\-\\/.,]*(\\d{2,4})?';
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-const DATE_RE = new RegExp(`(?<![\\p{L}])${DATE_WORDS}\\s*[:：\\-=.]*\\s*(?:${ISO_DATE}|${NUM_DATE}|${MON_DATE})`, 'iu');
-const WEIGHT_RE = /(?<![a-z])(?:weight|wght|wgt|wt|वजन)\.?\s*[:：\-=.]*\s*(\d+(?:\.\d+)?)\s*(kgs?|kilo(?:gram)?s?|grams?|gms?|gm|g|ग्रॅम|किलो)?\.?(?![a-z])/i;
-const COD_AMOUNT_RE = /(?:^|[\s(,;.\-/])(?:cod|c\.o\.d\.?|cash\s*on\s*delivery)\s*(?:amount|amt|value|charges?|for\s*rupees|for\s*rs\.?)?\s*(?:rs\.?|₹|inr)?\s*[:：\-=.]*\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+const DATE_RE = new RegExp(`(?<![\\p{L}])${DATE_WORDS}\\s*[:;：\\-=.]*\\s*(?:${ISO_DATE}|${NUM_DATE}|${MON_DATE})`, 'iu');
+const WEIGHT_RE = /(?<![a-z])(?:weight|wght|wgt|wt|वजन)\.?\s*[:;：\-=.]*\s*(\d+(?:\.\d+)?)\s*(kgs?|kilo(?:gram)?s?|grams?|gms?|gm|g|ग्रॅम|किलो)?\.?(?![a-z])/i;
+const COD_AMOUNT_RE = /(?:^|[\s(,;.\-/])(?:cod|c\.o\.d\.?|cash\s*on\s*delivery)\s*(?:amount|amt|value|charges?|for\s*rupees|for\s*rs\.?)?\s*(?:rs\.?|₹|inr)?\s*[:;：\-=.]*\s*(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
 const NUMBER_WORDS =
   /^(?:rs\.?|rupees?|inr|in\s*words|amount\s*in\s*words|only|and|paise|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakh|lakhs|lac|crore|[\s,.:\-–()/])+$/i;
 const FROM_HEAD = /^(?:from|frm|sender|sender'?s?\s*(?:details?|address|name)|consignor|prashak|प्रेषक|पाठवणारा|पाठवणार|भेजने\s*वाला)\b\s*[:：,\-–—.]*\s*(.*)$/i;

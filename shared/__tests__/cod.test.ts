@@ -569,7 +569,7 @@ test('client 18 Nov 2026: "DIST RAICHUR KARNATAKA 584170" -> District, State and
 });
 
 test('client 18 Nov 2026: ":=" labels, "(400099)" in the address, "maharashtra ( Mumbai )" – Pincode prints once, no empty ( )', () => {
-  const msg = 'Name :=. Saurabh santosh devrukhkar\nAddress:= vile Parle shree ram nagar western  express Highway vile Parle East (400099)\nLedmark:=  flora marbal\nState := maharashtra ( Mumbai )\nPincode:= 400099\nPhone number := 7448210573\n9361956859\nSize 8 Ringa COD 1199';
+  const msg = 'Name :=. Saurabh santosh devrukhkar\nAddress:= vile Parle shree ram nagar western  express Highway vile Parle East (400099)\nLedmark:=  flora marbal\nState := maharashtra ( Mumbai )\nPincode;= 400099\nPhone number ;= 7448210573\n9361956859\nSize 8 Ringa COD 1199';
   const r = parseCodMessage(msg);
   assert.equal(r.address, 'vile Parle shree ram nagar western express Highway vile Parle East, Mumbai');
   assert.equal(r.state, 'Maharashtra');

@@ -102,6 +102,7 @@ Server-only changes do not need a new APK.
   A "DIST RAICHUR KARNATAKA 584170" / "State … 411061" line: pincode and a state name at its end go to their own boxes.
   "(400099)" in the address leaves no empty "( )"; "State := maharashtra ( Mumbai )" → State Maharashtra, "Mumbai" added
   to the end of the address (unless already there).
+  A label may end with ";" too ("Pincode;= 400099", "Phone number ;= …"), like ":", "-", "=", ".".
   No 6 digits at all = Pincode left empty (required, staff type it).
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.

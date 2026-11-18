@@ -189,7 +189,7 @@ export function OrderForm({
       {input('amount', { keyboardType: 'decimal-pad', placeholder: t('Optional') })}
     </Field>
   );
-  // Order on screen (client's wish): Prepaid = Product + Size + Amount first, then the receiver.
+  // Order on screen (client's wish): Prepaid = Weight + Booking date, then Product + Size + Amount, then the receiver.
   // COD = COD details first, then Product + Size, then the receiver. Labels / printing are not affected.
   return (
     <View>
@@ -225,6 +225,18 @@ export function OrderForm({
             </View>
           </Field>
         </View>
+      ) : null}
+      {f.payment_type !== 'COD' ? (
+        // Prepaid labels print "Weight : …    Date : …" too (header line 3); both optional. At the top,
+        // like COD's details (client, 18 Nov 2026).
+        <Row>
+          <Field label={t('Weight (optional)')} error={errors.weight} style={half}>
+            {input('weight', { placeholder: t('e.g. 800 g') })}
+          </Field>
+          <Field label={t('Booking date (optional)')} error={errors.booking_date} style={half}>
+            <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder={t('Order date')} />
+          </Field>
+        </Row>
       ) : null}
       <Row>
         <Field label={t('Product name (optional)')} error={errors.product_name} style={wide && prepaidAmount ? { flex: 1.6 } : half}>
@@ -277,17 +289,6 @@ export function OrderForm({
       <Field label={t('More mobiles (optional)')} error={errors.mobile_more}>
         {input('mobile_more', { keyboardType: 'phone-pad', placeholder: t('3rd number and more, separated by commas') })}
       </Field>
-      {f.payment_type !== 'COD' ? (
-        // Prepaid labels print "Weight : …    Date : …" too (header line 3); both optional.
-        <Row>
-          <Field label={t('Weight (optional)')} error={errors.weight} style={half}>
-            {input('weight', { placeholder: t('e.g. 800 g') })}
-          </Field>
-          <Field label={t('Booking date (optional)')} error={errors.booking_date} style={half}>
-            <DateField label="" value={f.booking_date} onChange={(v) => onChange('booking_date', v)} placeholder={t('Order date')} />
-          </Field>
-        </Row>
-      ) : null}
     </View>
   );
 }

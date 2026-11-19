@@ -364,6 +364,19 @@ function sizeAndRest(value: string): { size: string; rest: string } {
   return { size: '', rest: v };
 }
 
+/** Several sizes of one product on one line (client, 19 Nov 2026): "Size 7&6 no rec kurundwad" -> ["7", "6"],
+ *  "Size 6,7&8 …" -> ["6", "7", "8"], "Size 6 and 7", "7&6 no …". Needs "&" / "and" (a comma alone, "Size 6,7", is NOT
+ *  read as two sizes) and a marked size ("Size …" before or "no" / "number" after). Otherwise null. */
+const SZ_N = '\\d{1,2}(?:\\.5)?(?!\\d|\\.\\d)';
+const SZ_LIST = `${SZ_N}(?:\\s*(?:,|&|\\band\\b)\\s*${SZ_N})+`;
+const SIZE_LIST_RE = new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*(${SZ_LIST})|(?<![\\d.])(${SZ_LIST})\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i');
+export function sizeList(text: string): string[] | null {
+  const m = toAsciiDigits(text).match(SIZE_LIST_RE);
+  const list = m?.[1] ?? m?.[2];
+  if (!list || !/&|\band\b/i.test(list)) return null;
+  return list.split(/\s*(?:,|&|\band\b)\s*/i).filter(Boolean);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
@@ -615,6 +628,10 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
     }
   }
   pairs.sort((a, b) => a.at - b.at);
+  for (const x of pairs) {
+    const many = sizeList(x.text);
+    if (many) x.size = many.join(', '); // "Size 7&6 no rec kurundwad" = 2 pairs of one product, one line in Note
+  }
   if (pairs.length) {
     f.size = pairs.map((x) => x.size).filter(Boolean).join(', ');
     note = pairs.map((x) => x.text).filter(Boolean).join(', ');
@@ -727,7 +744,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   const codM = toAsciiDigits(text).match(/\bcod\b\s*[:\-–=.]?\s*(?:rs\.?|₹|inr)?\s*(\d{2,7})(?![\d])/i);
   const saysCod = codM ? Number(codM[1]) : null;
 
-  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod, pairs: pairs.filter((x) => !x.extra).length };
+  return { ...f, amount, product_name, note, filled, missing, guessed, saysCod, pairs: pairs.filter((x) => !x.extra).reduce((n, x) => n + Math.max(1, pairCount(x.size)), 0) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1031,6 +1048,7 @@ export function parseCodMessage(text: string): CodParseResult {
   const parts = splitCod(text);
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
   const noteSize =
+    sizeList(parts.codNote)?.join(', ') ??
     parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i)?.[1] ??
     [...toAsciiDigits(parts.codNote).matchAll(/(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/gi)].map((x) => x[1]).join(', '); // "10 no Lokare…", "(8 no lokare…)"
   // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
@@ -1044,7 +1062,7 @@ export function parseCodMessage(text: string): CodParseResult {
     ...r,
     size: morePairs ? [r.size, noteSize].filter(Boolean).join(', ') : sz.size || noteSize,
     note: morePairs ? [r.note, parts.codNote].filter(Boolean).join(', ') : parts.codNote || sz.note || r.note,
-    pairs: morePairs ? r.pairs + 1 : Math.max(r.pairs, parts.codNote || sz.size ? 1 : 0),
+    pairs: morePairs ? r.pairs + Math.max(1, pairCount(noteSize)) : Math.max(r.pairs, pairCount(sz.size || noteSize), parts.codNote || sz.size ? 1 : 0),
     amount: parts.amount ?? r.amount,
     booking_date: parts.date,
     weight: parts.weight,

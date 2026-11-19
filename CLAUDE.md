@@ -105,6 +105,9 @@ Server-only changes do not need a new APK.
   The mark after a label can be any mix of : ; - = . _ > ("Pincode;= 400099", "Name :-", "State =>", ":_") – tested.
   Client, 19 Nov 2026 (again): NEVER drop a word of a product line – a "Size …" line goes to Note WHOLE, always (extra
   spaces, "Size - medium" too). Permanent test: 15 kinds of product lines × 1 or 2 pairs × PREPAID / COD, every word printed.
+  Several sizes of one product on one line (client, 19 Nov 2026): "Size 7&6 no rec kurundwad" → Size "7, 6", 2 pairs;
+  "Size 6,7&8 …" → 3; also "6 and 7", "7&6 no …" (`sizeList`). Needs & / "and" – "Size 6,7" (comma only) is NOT split.
+  Note stays the line as written.
   No 6 digits at all = Pincode left empty (required, staff type it).
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.

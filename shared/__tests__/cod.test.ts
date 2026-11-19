@@ -610,3 +610,23 @@ test('client 19 Nov 2026: NEVER lose a word of a product line – 15 kinds of li
     assert.deepEqual(lost, [], `${cod ? 'COD' : 'PREPAID'}: ${a} | ${b}`);
   }
 });
+
+test('client 19 Nov 2026: "Size 7&6 no rec kurundwad" = 2 pairs of one product; "6,7&8" = 3; "Size 6,7" (comma only) is not split', () => {
+  const head = 'Lukhman Khan\nseoni madhya pardesh imran auto parts alfa medical ke pass sahed wad\n480661\n8085000491\n6232689225\n';
+  const msg = head + 'Size 7&6 no rec kurundwad (cod 2598)';
+  const r = parseCodMessage(msg);
+  assert.deepEqual([r.size, r.pairs, r.amount, r.note], ['7, 6', 2, 2598, 'Size 7&6 no rec kurundwad']);
+  assert.equal(codOrderLine({ ...r, raw_message: msg, payment_type: 'COD' } as unknown as LabelOrder), 'COD 2598 (Size 7&6 no rec kurundwad)');
+  const cases: [string, string, number][] = [
+    ['Size 6,7&8 rec kurundwad', '6, 7, 8', 3],
+    ['Size 6, 7 & 8 no rec kurundwad', '6, 7, 8', 3],
+    ['Size 6 and 7 rec kurundwad', '6, 7', 2],
+    ['7&6 no rec kurundwad', '7, 6', 2],
+    ['Size 7 rec kurundwad', '7', 1],
+    ['Size 6,7 rec kurundwad', '6', 1],
+  ];
+  for (const [line, size, pairs] of cases) for (const p of [parseWhatsApp(head + line), parseCodMessage(head + line + ' COD 2598')]) {
+    assert.deepEqual([p.size, p.pairs], [size, pairs], line);
+    assert.ok(p.note.startsWith(line), `${line} -> note ${p.note}`);
+  }
+});

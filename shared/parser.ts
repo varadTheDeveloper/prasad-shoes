@@ -69,7 +69,9 @@ const LABELS: { key: Key; re: RegExp }[] = [
   { key: 'state', re: new RegExp(`^(?:state|राज्य)${END}`, 'i') },
   { key: 'size', re: new RegExp(`^(?:size|sizes|shoe\\s*size|साइज|साईज|माप)${END}`, 'i') },
   { key: 'ship_name', re: new RegExp(`^(?:naam|nam|name|full\\s*name|customer\\s*name|नाव|नाम|पूर्ण\\s*नाव)${END}`, 'i') },
-  { key: 'address', re: new RegExp(`^(?:address|addr|add|full\\s*address|पत्ता|पता)${END}`, 'i') },
+  // "Address updated. Gate No…" / "Updated address:" / "New address -" (the customer sent the address again,
+  // client 19 Nov 2026): "updated", "new"… are part of the label, never printed.
+  { key: 'address', re: new RegExp(`^(?:(?:new|updated|update|changed|correct|corrected|final|delivery|shipping|नवीन|नवा|नया)\\s*)?(?:address|addr|add|full\\s*address|पत्ता|पता)(?:\\s*[-:.]?\\s*(?:updated|update|changed|corrected|correct|new|is))?${END}`, 'i') },
 ];
 
 // ---------------------------------------------------------------------------------------------

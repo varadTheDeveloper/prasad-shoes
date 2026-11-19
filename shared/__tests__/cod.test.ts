@@ -642,3 +642,14 @@ test('client 19 Nov 2026: "Size..9 cod 2250" (two dots) fills Size 9; any mix of
     assert.equal(parseCodMessage(head + l + ' COD 1999').size, '9', l);
   }
 });
+
+test('client 19 Nov 2026: "Address updated. Gate No…" – "updated" / "new" / "correct"… are part of the label, never printed', () => {
+  const tail = '\nDeregaon, VTC: Malegaon\nPost Office: Malegaon,\nDistrict: Nashik,\nState: Maharashtra,\nPIN Code: 423203\nMobile: 7620055440\n8446515440\nSize 7 COD 2250';
+  for (const lab of ['Address updated.', 'Address updated:', 'Updated address:', 'New address -', 'Correct address', 'Address - updated', 'Delivery address:', 'नवीन पत्ता:', 'Address:']) {
+    const m = `Akhlaq Ahmed Ashfaq Ahmed\n${lab} Gate No. 38/2, House No. 289/200, Sayyad Park` + tail;
+    const r = parseCodMessage(m);
+    assert.equal(r.address, 'Gate No. 38/2, House No. 289/200, Sayyad Park, Deregaon, VTC: Malegaon, Post Office: Malegaon', lab);
+    assert.deepEqual([r.ship_name, r.district, r.pincode, r.mobile1, r.mobile2, r.size, r.amount], ['Akhlaq Ahmed Ashfaq Ahmed', 'Nashik', '423203', '7620055440', '8446515440', '7', 2250], lab);
+    assert.deepEqual(findUnused(m, r as any), [], lab);
+  }
+});

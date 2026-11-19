@@ -109,6 +109,8 @@ Server-only changes do not need a new APK.
   "Size 6,7&8 …" → 3; also "6 and 7", "7&6 no …" (`sizeList`). Needs & / "and" – "Size 6,7" (comma only) is NOT split.
   Note stays the line as written.
   Between "Size" and the number any mix of marks is fine ("Size..9", "Size:-9", "Size = 9", "Size__9") – 19 Nov 2026.
+  "Address updated." / "Updated address:" / "New address -" / "Correct address" / "नवीन पत्ता" = the Address label: the extra word
+  ("updated", "new"…) is never printed (client, 19 Nov 2026).
   No 6 digits at all = Pincode left empty (required, staff type it).
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.

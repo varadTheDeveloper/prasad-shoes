@@ -103,6 +103,8 @@ Server-only changes do not need a new APK.
   "(400099)" in the address leaves no empty "( )"; "State := maharashtra ( Mumbai )" → State Maharashtra, "Mumbai" added
   to the end of the address (unless already there).
   The mark after a label can be any mix of : ; - = . _ > ("Pincode;= 400099", "Name :-", "State =>", ":_") – tested.
+  Client, 19 Nov 2026 (again): NEVER drop a word of a product line – a "Size …" line goes to Note WHOLE, always (extra
+  spaces, "Size - medium" too). Permanent test: 15 kinds of product lines × 1 or 2 pairs × PREPAID / COD, every word printed.
   No 6 digits at all = Pincode left empty (required, staff type it).
 - Paste screen on a phone (client, 18 Nov 2026): while the Message box is being edited it grows to ~45–60% of the screen
   (font 17), the big paste button steps aside and a "Done ✓" button shrinks it back (also on blur). Website (wide) unchanged.

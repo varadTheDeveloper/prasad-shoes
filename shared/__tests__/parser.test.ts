@@ -425,9 +425,9 @@ test('"Size 12 antique Hankare kapshi 1799+ naal + sole": Size 12 only, the rest
   assert.equal(r.amount, 1799);
   assert.equal(r.product_name, '');
   assert.deepEqual(unused(text), []);
-  // no clear size number: Size stays empty, the words are kept in Note
+  // no clear size number: Size stays empty, the whole line is kept in Note as written (19 Nov 2026)
   const m = parseWhatsApp(`Ramesh Patil\nShivaji Chowk, Latur 413512\n9850011223\nSize - medium`);
-  assert.deepEqual([m.size, m.note], ['', 'medium']);
+  assert.deepEqual([m.size, m.note], ['', 'Size - medium']);
   assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize - 9 no`).size, '9');
   assert.equal(parseWhatsApp(`Ramesh\nLatur 413512\n9850011223\nSize: UK 8`).size, '8');
 });

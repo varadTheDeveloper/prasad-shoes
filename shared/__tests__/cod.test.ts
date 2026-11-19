@@ -596,3 +596,17 @@ test('client 18 Nov 2026: every way of writing the mark after a label (":-", ";=
     assert.deepEqual(findUnused(m, r as any), [], s);
   }
 });
+
+test('client 19 Nov 2026: NEVER lose a word of a product line – 15 kinds of lines, alone and with a 2nd pair, PREPAID and COD', () => {
+  const head = 'Syed Wasim\nSupermarket Prakash Mall, Kalburgi\nPin code 585101\n7021194571';
+  const prods = ['Size 7  naal black colour', 'Size  7 naal black colour', 'SIZE- 9 CUTKAAN KaPSHI 1799', 'size:7 awaj  shahu', 'Size : 7. Awaj Shahu', 'Size-8 pona sanke awaj', 'size 8no red kapsi', 'Size 11 3 tail Sankeshwar', '9 kapsi maharaja naal', '11 no black shahu 2999+ naal', 'Size 7 z patti kolhapur', 'Size big black', '(SIZE- 9 CUTKAAN KaPSHI 1799)', 'Size 10   naal + sole', '8 no lokare sahu awaj'];
+  const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  for (const a of prods) for (const b of ['', 'Size 10 naal black colour']) for (const cod of [false, true]) {
+    const msg = `${head}\n${a}${b ? '\n' + b : ''}${cod ? '\nCOD 1999' : ''}`;
+    const r = cod ? parseCodMessage(msg) : parseWhatsApp(msg);
+    const o = { ...r, raw_message: msg, payment_type: cod ? 'COD' : 'PREPAID' } as unknown as LabelOrder;
+    const printed = new Set(words(cod ? codOrderLine(o) : orderLine(o)));
+    const lost = [a, b].filter(Boolean).flatMap((l) => words(l).filter((w) => !printed.has(w)));
+    assert.deepEqual(lost, [], `${cod ? 'COD' : 'PREPAID'}: ${a} | ${b}`);
+  }
+});

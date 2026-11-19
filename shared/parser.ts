@@ -425,7 +425,9 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
       // prints it as it is, without "9 no" again.
       // Spaces compared loosely: "Size 7  naal black colour" (two spaces) is still the whole line (client, 19 Nov 2026).
       const one = (x: string) => x.replace(/\s+/g, ' ').trim();
-      const text = sz.rest ? (sz.size && one(lineRaw).includes(one(value)) ? one(lineRaw) : sz.rest) : '';
+      // Client, 19 Nov 2026: NEVER drop anything from the note – the whole line goes to Note as written, always
+      // (a line that is only "Size 7" fills the Size box and needs no note).
+      const text = sz.rest ? one(lineRaw) : '';
       const a = sz.rest.match(PRODUCT_AMOUNT);
       pairs.push({ size: sz.size, text, price: a ? parseAmount(a[1]) : null, at: lineNo });
       return;

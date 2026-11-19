@@ -491,3 +491,12 @@ test('pincode written without the word "pincode": inside the address, own line, 
     assert.deepEqual(unused(msg), [], `nothing "not used": ${how}`);
   }
 });
+
+test('client 19 Nov 2026: "Size 7  naal black colour" (two spaces) keeps "Size 7" in the note', () => {
+  const m = 'Syed Wasim\nKarnataka Kalburgi\nSupermarket Prakash Mall shop name classic photo frame Mall\nKarnatak Kalburgi\nPin code 585101\nmobile number\n7021194571\n9538081364\nSize 7  naal black colour\nSize 10 naal black colour';
+  const r = parseWhatsApp(m);
+  assert.equal(r.size, '7, 10');
+  assert.equal(r.note, 'Size 7 naal black colour, Size 10 naal black colour');
+  assert.equal(r.pairs, 2);
+  assert.equal(orderLine({ ...r, payment_type: 'PREPAID' } as any), 'PREPAID (Size 7 naal black colour, Size 10 naal black colour)');
+});

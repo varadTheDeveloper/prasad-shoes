@@ -423,7 +423,9 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
       const sz = sizeAndRest(value);
       // Note text = the whole size line exactly as written ("SIZE- 9 CUTKAAN KaPSHI 1799"); the label then
       // prints it as it is, without "9 no" again.
-      const text = sz.rest ? (sz.size && lineRaw.includes(value) ? lineRaw.replace(/\s{2,}/g, ' ').trim() : sz.rest) : '';
+      // Spaces compared loosely: "Size 7  naal black colour" (two spaces) is still the whole line (client, 19 Nov 2026).
+      const one = (x: string) => x.replace(/\s+/g, ' ').trim();
+      const text = sz.rest ? (sz.size && one(lineRaw).includes(one(value)) ? one(lineRaw) : sz.rest) : '';
       const a = sz.rest.match(PRODUCT_AMOUNT);
       pairs.push({ size: sz.size, text, price: a ? parseAmount(a[1]) : null, at: lineNo });
       return;

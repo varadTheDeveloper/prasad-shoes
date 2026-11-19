@@ -369,7 +369,7 @@ function sizeAndRest(value: string): { size: string; rest: string } {
  *  read as two sizes) and a marked size ("Size …" before or "no" / "number" after). Otherwise null. */
 const SZ_N = '\\d{1,2}(?:\\.5)?(?!\\d|\\.\\d)';
 const SZ_LIST = `${SZ_N}(?:\\s*(?:,|&|\\band\\b)\\s*${SZ_N})+`;
-const SIZE_LIST_RE = new RegExp(`(?:size|sizes|साइज|साईज|माप)\\s*[-:–.]?\\s*(${SZ_LIST})|(?<![\\d.])(${SZ_LIST})\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i');
+const SIZE_LIST_RE = new RegExp(`(?:size|sizes|साइज|साईज|माप)[\\s\\-:;–.=_>]*(${SZ_LIST})|(?<![\\d.])(${SZ_LIST})\\s*(?:no\\b|number\\b|नंबर|नं)`, 'i');
 export function sizeList(text: string): string[] | null {
   const m = toAsciiDigits(text).match(SIZE_LIST_RE);
   const list = m?.[1] ?? m?.[2];
@@ -481,7 +481,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
       const words = toAsciiDigits(raw)
         .replace(/\b(?:estimated|grand|sub)?\s*total\b|\b(?:amount|amt|cod|c\.o\.d|rs|rupees?|inr|price|payable|pay|paid|prepaid|charges?|cash|on|delivery|for|only|value|of)\b|[₹\d.,:\-\/()+=]/gi, ' ');
       if (/\p{L}{3,}/u.test(words) && !NUMBER_WORDS.test(words.trim())) {
-        const ms = raw.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i);
+        const ms = raw.match(/(?:size|sizes|साइज|साईज|माप)[\s\-:;–.=_>]*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i);
         pairs.push({ size: ms?.[1] ?? '', text: raw.replace(/\s{2,}/g, ' ').trim(), price: null, at: lineNo });
       }
       continue;
@@ -606,7 +606,7 @@ export function parseWhatsApp(text: string, opts: { pairAfterEnd?: boolean } = {
   if (lastContactAt >= 0) {
     for (const k of keptInfo) {
       if (k.at <= lastContactAt || pairs.some((x) => x.at === k.at) || !/\p{L}{2,}/u.test(k.line)) continue;
-      const ms = toAsciiDigits(k.line).match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)|(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i);
+      const ms = toAsciiDigits(k.line).match(/(?:size|sizes|साइज|साईज|माप)[\s\-:;–.=_>]*(\d{1,2}(?:\.5)?)(?!\d|\.\d)|(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/i);
       const startsWithNumber = /^\s*\d{1,2}(?:\.5)?\s+\p{L}/u.test(toAsciiDigits(k.line));
       pairs.push({ size: ms?.[1] ?? ms?.[2] ?? '', text: k.line.replace(/\s{2,}/g, ' ').trim(), price: null, at: k.at, extra: !ms && !startsWithNumber });
       looseKept = looseKept.filter((x) => x !== k.line);
@@ -1049,7 +1049,7 @@ export function parseCodMessage(text: string): CodParseResult {
   // COD note: the words after the amount, as written; Size = the number in them (for the Size box / Excel).
   const noteSize =
     sizeList(parts.codNote)?.join(', ') ??
-    parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)\s*[-:–.]?\s*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i)?.[1] ??
+    parts.codNote.match(/(?:size|sizes|साइज|साईज|माप)[\s\-:;–.=_>]*(\d{1,2}(?:\.5)?)(?!\d|\.\d)/i)?.[1] ??
     [...toAsciiDigits(parts.codNote).matchAll(/(?<![\d.])(\d{1,2}(?:\.5)?)\s*(?:no\b|number\b|नंबर|नं)/gi)].map((x) => x[1]).join(', '); // "10 no Lokare…", "(8 no lokare…)"
   // The COD line with a size is the message's last line -> a size-less pair line just before it is a pair too.
   const codIsLast = /\bcod\b/i.test(text.trimEnd().split('\n').pop() ?? '');

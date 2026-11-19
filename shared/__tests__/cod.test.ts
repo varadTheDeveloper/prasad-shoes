@@ -599,7 +599,7 @@ test('client 18 Nov 2026: every way of writing the mark after a label (":-", ";=
 
 test('client 19 Nov 2026: NEVER lose a word of a product line – 15 kinds of lines, alone and with a 2nd pair, PREPAID and COD', () => {
   const head = 'Syed Wasim\nSupermarket Prakash Mall, Kalburgi\nPin code 585101\n7021194571';
-  const prods = ['Size 7  naal black colour', 'Size  7 naal black colour', 'SIZE- 9 CUTKAAN KaPSHI 1799', 'size:7 awaj  shahu', 'Size : 7. Awaj Shahu', 'Size-8 pona sanke awaj', 'size 8no red kapsi', 'Size 11 3 tail Sankeshwar', '9 kapsi maharaja naal', '11 no black shahu 2999+ naal', 'Size 7 z patti kolhapur', 'Size big black', '(SIZE- 9 CUTKAAN KaPSHI 1799)', 'Size 10   naal + sole', '8 no lokare sahu awaj'];
+  const prods = ['Size 7  naal black colour', 'Size  7 naal black colour', 'SIZE- 9 CUTKAAN KaPSHI 1799', 'size:7 awaj  shahu', 'Size : 7. Awaj Shahu', 'Size-8 pona sanke awaj', 'size 8no red kapsi', 'Size 11 3 tail Sankeshwar', '9 kapsi maharaja naal', '11 no black shahu 2999+ naal', 'Size 7 z patti kolhapur', 'Size big black', '(SIZE- 9 CUTKAAN KaPSHI 1799)', 'Size 10   naal + sole', '8 no lokare sahu awaj', 'Size..9 shahu', 'size:-8 kapsi', 'Size = 7 awaj', 'Size__9 naal'];
   const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   for (const a of prods) for (const b of ['', 'Size 10 naal black colour']) for (const cod of [false, true]) {
     const msg = `${head}\n${a}${b ? '\n' + b : ''}${cod ? '\nCOD 1999' : ''}`;
@@ -628,5 +628,17 @@ test('client 19 Nov 2026: "Size 7&6 no rec kurundwad" = 2 pairs of one product; 
   for (const [line, size, pairs] of cases) for (const p of [parseWhatsApp(head + line), parseCodMessage(head + line + ' COD 2598')]) {
     assert.deepEqual([p.size, p.pairs], [size, pairs], line);
     assert.ok(p.note.startsWith(line), `${line} -> note ${p.note}`);
+  }
+});
+
+test('client 19 Nov 2026: "Size..9 cod 2250" (two dots) fills Size 9; any mix of marks after "Size"', () => {
+  const head = 'P Satyanarayana\nAddress. Shop no 14\nBowenpally market\nSecunderabad\n500009\nMobile 9912444440\n';
+  const msg = head + 'Size..9 cod 2250';
+  const r = parseCodMessage(msg);
+  assert.deepEqual([r.size, r.amount, r.note], ['9', 2250, 'Size..9']);
+  assert.equal(codOrderLine({ ...r, raw_message: msg, payment_type: 'COD' } as unknown as LabelOrder), 'COD 2250 (Size..9)');
+  for (const l of ['Size:-9 kapsi', 'Size = 9 kapsi', 'size...9 kapsi', 'Size;9 kapsi', 'Size__9 kapsi', 'Size :- 9 kapsi']) {
+    assert.equal(parseWhatsApp(head + l).size, '9', l);
+    assert.equal(parseCodMessage(head + l + ' COD 1999').size, '9', l);
   }
 });
